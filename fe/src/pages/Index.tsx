@@ -68,7 +68,8 @@ const Index = () => {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [docFilter, setDocFilter] = useState("");
   const [docCategoryFilter, setDocCategoryFilter] = useState("");
-  const [fromApprovals, setFromApprovals] = useState(false);
+  const [detailReturnScreen, setDetailReturnScreen] =
+    useState<Screen>("documents");
   const [mySubmissionsTab, setMySubmissionsTab] = useState<
     "all" | "cho-duyet" | "da-duyet" | "da-tu-choi"
   >("all");
@@ -102,13 +103,12 @@ const Index = () => {
 
   const handleOpenDetail = (docId: string) => {
     setSelectedDocId(docId);
-    setFromApprovals(screen === "approvals");
+    setDetailReturnScreen(screen === "document-detail" ? detailReturnScreen : screen);
     setScreen("document-detail");
   };
 
   const handleBackFromDetail = () => {
-    setScreen(fromApprovals ? "approvals" : "documents");
-    setFromApprovals(false);
+    setScreen(detailReturnScreen);
   };
 
   const handleNavigateWithFilter = (filter: string) => {
@@ -235,7 +235,7 @@ const Index = () => {
   return (
     <div className="flex min-h-screen w-full">
       <AppSidebar
-        activeScreen={screen}
+        activeScreen={screen === "document-detail" ? detailReturnScreen : screen}
         onNavigate={handleNavigate}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -339,7 +339,7 @@ const Index = () => {
               docId={selectedDocId}
               document={documents.find((d) => d.id === selectedDocId)}
               onBack={handleBackFromDetail}
-              showApprovalActions={fromApprovals}
+              showApprovalActions={detailReturnScreen === "approvals"}
               onApprove={handleApproveDoc}
               onReject={handleRejectDoc}
             />

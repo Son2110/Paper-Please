@@ -139,9 +139,7 @@ export function AppSidebar({
                 {group.items
                   .filter((item) => item.id !== "organization" || isOrganizationOwner)
                   .map((item) => {
-                  const active =
-                    activeScreen === item.id ||
-                    (item.id === "documents" && activeScreen === "document-detail");
+                  const active = activeScreen === item.id;
                   const Icon = item.icon;
 
                   return (
