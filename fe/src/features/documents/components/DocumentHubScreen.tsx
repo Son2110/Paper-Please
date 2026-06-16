@@ -25,8 +25,10 @@ import {
   type WorkflowStepType,
 } from "@/api/documentApi";
 import {
+  ORGANIZATION_ROLES,
   organizationApi,
   type OrganizationMemberDTO,
+  type OrganizationRole,
 } from "@/api/organizationApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
@@ -46,6 +48,12 @@ interface CreateFormState {
   changeSummary: string;
 }
 
+interface BulkUploadFormState {
+  description: string;
+  dueDate: string;
+  changeSummary: string;
+}
+
 interface WorkflowAssigneeRow {
   id: string;
   userId: string;
@@ -55,6 +63,12 @@ interface WorkflowAssigneeRow {
 
 const emptyCreateForm: CreateFormState = {
   title: "",
+  description: "",
+  dueDate: "",
+  changeSummary: "",
+};
+
+const emptyBulkUploadForm: BulkUploadFormState = {
   description: "",
   dueDate: "",
   changeSummary: "",
@@ -124,6 +138,16 @@ function getMemberLabel(member: OrganizationMemberDTO) {
   return member.user?.displayName || member.user?.email || member.user?.id || "Thành viên";
 }
 
+function normalizeRole(value: OrganizationMemberDTO["role"]): OrganizationRole {
+  if (typeof value === "string") return value as OrganizationRole;
+  return ORGANIZATION_ROLES[value - 1] ?? "Member";
+}
+
+function getFileTitle(fileName: string) {
+  const dotIndex = fileName.lastIndexOf(".");
+  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+}
+
 export function DocumentHubScreen({
   onOpenDetail,
   mode = "repository",
@@ -133,12 +157,17 @@ export function DocumentHubScreen({
   const { activeOrganization } = useOrganization();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
+  const [bulkUploadForm, setBulkUploadForm] =
+    useState<BulkUploadFormState>(emptyBulkUploadForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [workflowRows, setWorkflowRows] = useState<WorkflowAssigneeRow[]>([
     createWorkflowRow(),
   ]);
   const [isCreating, setIsCreating] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentDTO | null>(null);
 
@@ -206,6 +235,18 @@ export function DocumentHubScreen({
     () => membersQuery.data?.items ?? [],
     [membersQuery.data?.items],
   );
+  const currentMembership = useMemo(
+    () =>
+      organizationMembers.find((member) => getMemberUserId(member) === user?.id) ??
+      null,
+    [organizationMembers, user?.id],
+  );
+  const canBulkUpload =
+    isRepository &&
+    (activeOrganization?.owner?.id === user?.id ||
+      (currentMembership
+        ? ["Owner", "Administrator"].includes(normalizeRole(currentMembership.role))
+        : false));
   const isLoading = documentsQuery.isLoading || documentsQuery.isFetching;
   const error = documentsQuery.error instanceof Error ? documentsQuery.error.message : null;
 
@@ -250,6 +291,70 @@ export function DocumentHubScreen({
     setSelectedFile(null);
     setWorkflowRows([createWorkflowRow()]);
     setShowCreateModal(false);
+  };
+
+  const resetBulkUploadModal = () => {
+    setBulkUploadForm(emptyBulkUploadForm);
+    setBulkFiles([]);
+    setShowBulkUploadModal(false);
+  };
+
+  const handleBulkUpload = async () => {
+    if (!organizationId) {
+      toast.error("Bạn cần chọn tổ chức trước khi tải tài liệu.");
+      return;
+    }
+    if (!canBulkUpload) {
+      toast.error("Chỉ chủ sở hữu hoặc quản trị viên tổ chức mới được tải nhiều tài liệu.");
+      return;
+    }
+    if (bulkFiles.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một file.");
+      return;
+    }
+
+    setIsBulkUploading(true);
+    try {
+      const uploadedFiles = await cdnApi.uploadMultiple(
+        bulkFiles,
+        bulkUploadForm.description.trim() || undefined,
+      );
+
+      await documentApi.bulkImport({
+        organizationId,
+        documents: uploadedFiles.map((uploaded, index) => {
+          const sourceFile = bulkFiles[index];
+          return {
+            title: getFileTitle(uploaded.originalName || sourceFile?.name || "Tài liệu"),
+            description: bulkUploadForm.description.trim() || null,
+            dueDate: bulkUploadForm.dueDate
+              ? new Date(bulkUploadForm.dueDate).toISOString()
+              : null,
+            version: {
+              fileName: uploaded.originalName || sourceFile?.name || "document",
+              fileUrl: uploaded.apiUrl || uploaded.APIUrl || uploaded.url,
+              mimeType:
+                uploaded.mimeType ||
+                sourceFile?.type ||
+                "application/octet-stream",
+              fileSize: uploaded.sizeBytes || sourceFile?.size || 0,
+              changeSummary:
+                bulkUploadForm.changeSummary.trim() || "Tải lên hàng loạt",
+            },
+          };
+        }),
+      });
+
+      toast.success(`Đã tải ${bulkFiles.length} tài liệu. Tài liệu mới nằm ở bản nháp.`);
+      resetBulkUploadModal();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Không thể tải nhiều tài liệu.",
+      );
+    } finally {
+      setIsBulkUploading(false);
+    }
   };
 
   const handleCreateDocument = async () => {
@@ -389,6 +494,17 @@ export function DocumentHubScreen({
             <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             Tải lại
           </button>
+          {canBulkUpload && (
+            <button
+              type="button"
+              onClick={() => setShowBulkUploadModal(true)}
+              disabled={!organizationId}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <UploadCloud className="h-4 w-4" />
+              Tải nhiều file
+            </button>
+          )}
           {isSubmissions && (
             <button
               type="button"
@@ -602,6 +718,155 @@ export function DocumentHubScreen({
           <p className="mt-1 text-sm text-muted-foreground">
             {deleteTarget?.description || "Tài liệu không có mô tả."}
           </p>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={showBulkUploadModal}
+        onOpenChange={(open) => {
+          if (!open && !isBulkUploading) resetBulkUploadModal();
+        }}
+        className="max-w-2xl"
+        contentClassName="max-h-[70vh]"
+        title="Tải nhiều file"
+        description="Dành cho chủ sở hữu hoặc quản trị viên. Mỗi file sẽ được tạo thành một tài liệu bản nháp."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={resetBulkUploadModal}
+              disabled={isBulkUploading}
+              className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkUpload}
+              disabled={isBulkUploading || bulkFiles.length === 0}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+            >
+              {isBulkUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UploadCloud className="h-4 w-4" />
+              )}
+              Tải lên
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-background px-4 py-8 text-center transition hover:bg-muted">
+            <UploadCloud className="h-8 w-8 text-muted-foreground" />
+            <span className="mt-3 text-sm font-semibold text-foreground">
+              {bulkFiles.length > 0
+                ? `Đã chọn ${bulkFiles.length} file`
+                : "Chọn nhiều file để tải lên"}
+            </span>
+            <span className="mt-1 text-xs text-muted-foreground">
+              PDF, DOCX, hình ảnh hoặc file nghiệp vụ khác
+            </span>
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) =>
+                setBulkFiles(Array.from(event.target.files ?? []))
+              }
+            />
+          </label>
+
+          {bulkFiles.length > 0 && (
+            <div className="rounded-lg border">
+              <div className="border-b px-4 py-3 text-sm font-semibold text-foreground">
+                Danh sách file
+              </div>
+              <div className="max-h-52 divide-y overflow-y-auto">
+                {bulkFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {file.type || "Không rõ định dạng"} · {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBulkFiles((prev) =>
+                          prev.filter((_, fileIndex) => fileIndex !== index),
+                        )
+                      }
+                      disabled={isBulkUploading}
+                      className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-50"
+                      aria-label="Xóa file khỏi danh sách"
+                      title="Xóa file khỏi danh sách"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label>
+              <span className="text-sm font-medium text-foreground">
+                Hạn xử lý chung
+              </span>
+              <input
+                type="date"
+                value={bulkUploadForm.dueDate}
+                onChange={(event) =>
+                  setBulkUploadForm((prev) => ({
+                    ...prev,
+                    dueDate: event.target.value,
+                  }))
+                }
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+
+            <label>
+              <span className="text-sm font-medium text-foreground">
+                Ghi chú phiên bản
+              </span>
+              <input
+                value={bulkUploadForm.changeSummary}
+                onChange={(event) =>
+                  setBulkUploadForm((prev) => ({
+                    ...prev,
+                    changeSummary: event.target.value,
+                  }))
+                }
+                placeholder="Tải lên hàng loạt"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+
+            <label className="md:col-span-2">
+              <span className="text-sm font-medium text-foreground">Mô tả chung</span>
+              <textarea
+                value={bulkUploadForm.description}
+                onChange={(event) =>
+                  setBulkUploadForm((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="Mô tả dùng chung cho các tài liệu được tạo từ danh sách file."
+                className="mt-2 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          </div>
         </div>
       </AppModal>
 

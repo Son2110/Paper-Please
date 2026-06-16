@@ -130,6 +130,18 @@ export interface UploadDocumentVersionRequest {
   changeSummary?: string | null;
 }
 
+export interface BulkDocumentItemRequest {
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  version: UploadDocumentVersionRequest;
+}
+
+export interface BulkCreateDocumentRequest {
+  organizationId: string;
+  documents: BulkDocumentItemRequest[];
+}
+
 export interface AddDocumentParticipantRequest {
   userId: string;
   accessLevel: DocumentAccessLevel;
@@ -172,6 +184,13 @@ export interface DocumentFilterRequest {
 export const documentApi = {
   createDocument(request: CreateDocumentRequest) {
     return apiRequest<DocumentDTO>("/documents", {
+      method: "POST",
+      body: request,
+    });
+  },
+
+  bulkImport(request: BulkCreateDocumentRequest) {
+    return apiRequest<DocumentDTO[]>("/documents/import", {
       method: "POST",
       body: request,
     });

@@ -42,8 +42,8 @@ export const cdnApi = {
   uploadMultiple(files: File[], description?: string) {
     const formData = new FormData();
     files.forEach((file, index) => {
-      formData.append(`[${index}].File`, file);
-      if (description) formData.append(`[${index}].Description`, description);
+      formData.append(`forms[${index}].File`, file);
+      if (description) formData.append(`forms[${index}].Description`, description);
     });
 
     return apiRequest<UploadedFileResponse[]>("/Files/upload-multiple", {
