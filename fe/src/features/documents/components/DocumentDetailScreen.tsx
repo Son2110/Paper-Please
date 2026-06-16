@@ -13,6 +13,7 @@ import {
   MessageSquare,
   RefreshCcw,
   Send,
+  Trash2,
   UploadCloud,
   UserPlus,
   Users,
