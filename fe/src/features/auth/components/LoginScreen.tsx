@@ -21,6 +21,9 @@ interface LoginScreenProps {
   onLogin?: () => void;
 }
 
+const REMEMBER_LOGIN_KEY = "paperPlease.rememberLogin";
+const REMEMBERED_EMAIL_KEY = "paperPlease.rememberedEmail";
+
 const inputClass =
   "w-full mt-1 px-3 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed";
 
@@ -37,10 +40,14 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(
+    () => window.localStorage.getItem(REMEMBER_LOGIN_KEY) !== "false",
+  );
   const [localError, setLocalError] = useState("");
 
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginEmail, setLoginEmail] = useState(
+    () => window.localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? "",
+  );
   const [loginPassword, setLoginPassword] = useState("");
 
   const [registerEmail, setRegisterEmail] = useState("");
@@ -118,6 +125,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     e.preventDefault();
     try {
       await login({ email: loginEmail, password: loginPassword }, remember);
+      window.localStorage.setItem(REMEMBER_LOGIN_KEY, String(remember));
+      if (remember) {
+        window.localStorage.setItem(REMEMBERED_EMAIL_KEY, loginEmail.trim());
+      } else {
+        window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
       toast.success("Đăng nhập thành công");
       onLogin?.();
     } catch (err) {
@@ -185,6 +198,10 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (resetToken.length !== 6) {
+      toast.error("Mã xác thực phải gồm 6 ký tự");
+      return;
+    }
     await runAuthAction(async () => {
       try {
         await authApi.resetPassword({
@@ -501,13 +518,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 <label className="text-sm font-medium text-foreground">
                   Mã xác thực
                 </label>
-                <textarea
+                <input
+                  type="text"
+                  inputMode="text"
+                  maxLength={6}
                   value={resetToken}
-                  onChange={(e) => setResetToken(e.target.value)}
+                  onChange={(e) =>
+                    setResetToken(e.target.value.trim().slice(0, 6))
+                  }
                   required
                   disabled={pending}
-                  rows={3}
-                  className="w-full mt-1 px-3 py-2.5 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed resize-none"
+                  placeholder="Nhập mã 6 ký tự"
+                  className={inputClass}
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -547,22 +569,11 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   />
                 </div>
               </div>
-              <div className="grid gap-2 sm:grid-cols-[auto_1fr]">
-                <button
-                  type="button"
-                  disabled={pending || !recoveryEmail || !resetToken}
-                  onClick={() =>
-                    handleVerifyToken("ResetPassword", recoveryEmail, resetToken)
-                  }
-                  className="inline-flex items-center justify-center gap-2 border px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Kiểm tra mã
-                </button>
+              <div>
                 <button
                   type="submit"
-                  disabled={pending}
-                  className="inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={pending || resetToken.length !== 6}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {pending && <Loader2 className="w-4 h-4 animate-spin" />}
                   Đặt lại mật khẩu
