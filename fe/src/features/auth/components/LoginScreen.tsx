@@ -56,9 +56,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const [confirmEmail, setConfirmEmail] = useState("");
   const [confirmToken, setConfirmToken] = useState("");
+  const [registeredConfirmationEmail, setRegisteredConfirmationEmail] =
+    useState("");
 
   const pending = isLoading || isSubmitting;
   const displayedError = localError || (mode === "login" ? error : "");
+  const isPostRegisterConfirmation =
+    mode === "confirm" && Boolean(registeredConfirmationEmail);
 
   const modeMeta = useMemo(() => {
     switch (mode) {
@@ -83,7 +87,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       case "confirm":
         return {
           title: "Xác nhận email",
-          subtitle: "Gửi mã hoặc nhập mã xác nhận email",
+          subtitle: registeredConfirmationEmail
+            ? "Xác nhận email để hoàn tất đăng ký"
+            : "Gửi mã hoặc nhập mã xác nhận email",
           icon: ShieldCheck,
         };
       default:
@@ -93,7 +99,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           icon: FileText,
         };
     }
-  }, [mode]);
+  }, [mode, registeredConfirmationEmail]);
 
   const ModeIcon = modeMeta.icon;
 
@@ -102,6 +108,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setLocalError("");
     setShowPassword(false);
     setShowNewPassword(false);
+    if (nextMode !== "confirm") {
+      setRegisteredConfirmationEmail("");
+    }
   };
 
   const runAuthAction = async (action: () => Promise<void>) => {
@@ -131,17 +140,32 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     e.preventDefault();
     await runAuthAction(async () => {
       try {
+        const email = registerEmail.trim();
         await authApi.register({
-          email: registerEmail,
+          email,
           password: registerPassword,
           displayName: displayName || undefined,
           phoneNumber: phoneNumber || undefined,
           dob,
         });
-        toast.success("Đăng ký thành công");
-        setLoginEmail(registerEmail);
+        setLoginEmail(email);
         setLoginPassword("");
-        switchMode("login");
+        setConfirmEmail(email);
+        setConfirmToken("");
+        setRegisteredConfirmationEmail(email);
+        switchMode("confirm");
+
+        try {
+          await authApi.sendEmailConfirmation({ email });
+          toast.success("Đăng ký thành công. Đã gửi mã xác nhận email");
+        } catch (sendErr) {
+          const message = formatError(
+            sendErr,
+            "Đăng ký thành công nhưng chưa gửi được mã xác nhận",
+          );
+          setLocalError(message);
+          toast.error(message);
+        }
       } catch (err) {
         const message = formatError(err, "Không thể đăng ký tài khoản");
         setLocalError(message);
@@ -224,6 +248,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         await authApi.confirmEmail({ email: confirmEmail, token: confirmToken });
         toast.success("Xác nhận email thành công");
         setLoginEmail(confirmEmail);
+        setRegisteredConfirmationEmail("");
         switchMode("login");
       } catch (err) {
         const message = formatError(err, "Không thể xác nhận email");
@@ -356,16 +381,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                     className="text-primary hover:underline"
                   >
                     Quên mật khẩu?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmEmail(loginEmail);
-                      switchMode("confirm");
-                    }}
-                    className="text-primary hover:underline"
-                  >
-                    Xác nhận email
                   </button>
                 </div>
               </div>
@@ -589,9 +604,14 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   value={confirmEmail}
                   onChange={(e) => setConfirmEmail(e.target.value)}
                   required
-                  disabled={pending}
+                  disabled={pending || isPostRegisterConfirmation}
                   className={inputClass}
                 />
+                {isPostRegisterConfirmation && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Email này vừa được đăng ký. Vui lòng xác nhận trước khi đăng nhập.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">
@@ -645,7 +665,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             </p>
           )}
 
-          {mode !== "login" && (
+          {mode !== "login" && !isPostRegisterConfirmation && (
             <button
               type="button"
               onClick={() => switchMode("login")}
