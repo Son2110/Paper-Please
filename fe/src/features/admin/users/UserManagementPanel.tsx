@@ -143,6 +143,7 @@ export function UserManagementPanel() {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<UserDTO | null>(null);
   const [billingPage, setBillingPage] = useState(1);
 
   const isAdmin = currentUser?.userType === "Admin";
@@ -234,8 +235,12 @@ export function UserManagementPanel() {
 
   const deleteMutation = useMutation({
     mutationFn: adminUserApi.deleteUser,
-    onSuccess: () => {
+    onSuccess: (_data, deletedUserId) => {
       toast.success("Đã xóa người dùng");
+      setDeleteTargetUser(null);
+      if (detailUserId === deletedUserId) {
+        closeDetail();
+      }
       invalidateUsers();
     },
     onError: (err) => {
@@ -291,9 +296,12 @@ export function UserManagementPanel() {
       toast.error("Không thể xóa chính tài khoản đang đăng nhập");
       return;
     }
-    const label = targetUser.displayName || targetUser.email || "người dùng này";
-    if (!window.confirm(`Xóa ${label}?`)) return;
-    deleteMutation.mutate(targetUser.id);
+    setDeleteTargetUser(targetUser);
+  };
+
+  const confirmDeleteUser = () => {
+    if (!deleteTargetUser?.id) return;
+    deleteMutation.mutate(deleteTargetUser.id);
   };
 
   const users = data?.items ?? [];
@@ -968,6 +976,58 @@ export function UserManagementPanel() {
                 </button>
               </div>
         </form>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(deleteTargetUser)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) {
+            setDeleteTargetUser(null);
+          }
+        }}
+        title="Xóa người dùng"
+        description="Thao tác này sẽ xóa tài khoản khỏi hệ thống."
+        className="max-w-md"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteTargetUser(null)}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteUser}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa người dùng
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            Bạn có chắc muốn xóa{" "}
+            <span className="font-semibold">
+              {deleteTargetUser?.displayName ||
+                deleteTargetUser?.email ||
+                "người dùng này"}
+            </span>
+            ?
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Người dùng sau khi bị xóa sẽ không còn xuất hiện trong danh sách quản trị.
+          </p>
+        </div>
       </AppModal>
     </div>
   );
