@@ -30,8 +30,8 @@ npm install
 Create or update `.env.local` inside the `fe` folder.
 
 ```env
-VITE_API_BASE_URL=https://papermanagementsystem.runasp.net/api
-VITE_CDN_BASE_URL=https://papermanagementsystemcdn.runasp.net/api
+VITE_API_BASE_URL=
+VITE_CDN_BASE_URL=
 ```
 
 Variable meaning:
