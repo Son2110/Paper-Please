@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentUser);
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Unable to sign in. Please try again.";
+          err instanceof Error ? err.message : "Không thể đăng nhập. Vui lòng thử lại.";
         setError(message);
         throw err;
       } finally {

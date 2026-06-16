@@ -85,6 +85,7 @@ function isApiEnvelope<T>(payload: unknown): payload is ApiEnvelope<T> {
 
 function localizeApiMessage(message: string) {
   const normalized = message.trim();
+  const lower = normalized.toLowerCase();
   const maxOrganizationsMatch = normalized.match(
     /^Your plan only allows\s+(\d+)\s+organizations\.?$/i,
   );
@@ -94,10 +95,23 @@ function localizeApiMessage(message: string) {
   }
 
   if (
-    normalized.toLowerCase() ===
-    "you need an active subscription to create organizations."
+    lower === "you need an active subscription to create organizations."
   ) {
     return "Bạn cần có gói dịch vụ đang hoạt động để tạo tổ chức.";
+  }
+
+  if (
+    lower.includes("invalid email") ||
+    lower.includes("invalid password") ||
+    lower.includes("invalid username") ||
+    lower.includes("invalid credentials") ||
+    lower.includes("incorrect email") ||
+    lower.includes("incorrect password") ||
+    lower.includes("login failed") ||
+    lower.includes("sign in failed") ||
+    lower.includes("unauthorized")
+  ) {
+    return "Email hoặc mật khẩu không đúng.";
   }
 
   return message;

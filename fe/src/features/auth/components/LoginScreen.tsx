@@ -34,6 +34,23 @@ function formatError(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
+function formatLoginError(err: unknown) {
+  const message = formatError(err, "Không thể đăng nhập. Vui lòng thử lại.");
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("invalid") ||
+    lower.includes("incorrect") ||
+    lower.includes("unauthorized") ||
+    lower.includes("failed") ||
+    lower.includes("401")
+  ) {
+    return "Email hoặc mật khẩu không đúng.";
+  }
+
+  return message;
+}
+
 export function LoginScreen({ onLogin }: LoginScreenProps) {
   const { login, isLoading, error } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -134,7 +151,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       toast.success("Đăng nhập thành công");
       onLogin?.();
     } catch (err) {
-      const message = formatError(err, "Không thể đăng nhập");
+      const message = formatLoginError(err);
       setLocalError(message);
       toast.error(message);
     }
