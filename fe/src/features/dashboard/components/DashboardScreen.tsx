@@ -119,9 +119,32 @@ export function DashboardScreen({
     [documents, user?.displayName, user?.email, user?.id],
   );
 
+  const pendingTaskDocumentIds = useMemo(
+    () => new Set(pendingTasks.map((task) => task.documentId)),
+    [pendingTasks],
+  );
+
+  const relevantDocuments = useMemo(
+    () =>
+      documents.filter(
+        (document) =>
+          document.ownerId === user?.id ||
+          document.ownerName === user?.displayName ||
+          document.ownerName === user?.email ||
+          pendingTaskDocumentIds.has(document.id),
+      ),
+    [
+      documents,
+      pendingTaskDocumentIds,
+      user?.displayName,
+      user?.email,
+      user?.id,
+    ],
+  );
+
   const dueSoonDocuments = useMemo(
     () =>
-      [...documents]
+      [...relevantDocuments]
         .filter((document) => document.status !== "Rejected")
         .filter((document) => {
           const days = getDaysUntil(document.dueDate);
@@ -133,7 +156,7 @@ export function DashboardScreen({
           return left - right;
         })
         .slice(0, 5),
-    [documents],
+    [relevantDocuments],
   );
 
   const isInitialLoading =
@@ -161,7 +184,8 @@ export function DashboardScreen({
     },
     {
       label: "Hoàn tất",
-      value: documents.filter((document) => document.status === "Completed").length,
+      value: relevantDocuments.filter((document) => document.status === "Completed")
+        .length,
       icon: CheckCircle,
       filter: "da-duyet",
     },
