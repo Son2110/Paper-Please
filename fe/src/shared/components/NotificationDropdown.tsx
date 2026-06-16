@@ -41,6 +41,65 @@ function getNotificationVisual(notification: NotificationDTO) {
   return { icon: Bell, color: "text-muted-foreground" };
 }
 
+const notificationTextMap: Record<string, string> = {
+  "notification marked as read.": "Đã đánh dấu thông báo là đã đọc.",
+  "marked all notification as read.": "Đã đánh dấu tất cả thông báo là đã đọc.",
+  "no unread notifications.": "Không có thông báo chưa đọc.",
+  "notification sent.": "Đã gửi thông báo.",
+};
+
+const notificationWordMap: Record<string, string> = {
+  notification: "thông báo",
+  document: "tài liệu",
+  documents: "tài liệu",
+  workflow: "quy trình",
+  approved: "đã phê duyệt",
+  approve: "phê duyệt",
+  rejected: "đã từ chối",
+  reject: "từ chối",
+  completed: "hoàn tất",
+  pending: "đang chờ",
+  reminder: "nhắc việc",
+  warning: "cảnh báo",
+  upload: "tải lên",
+  uploaded: "đã tải lên",
+  comment: "bình luận",
+  message: "tin nhắn",
+  payment: "thanh toán",
+  subscription: "gói dịch vụ",
+  organization: "tổ chức",
+  user: "người dùng",
+};
+
+const notificationTypeMap: Record<string, string> = {
+  Info: "Thông tin",
+  Success: "Thành công",
+  Warning: "Cảnh báo",
+  Error: "Lỗi",
+  Reminder: "Nhắc việc",
+  Document: "Tài liệu",
+  Workflow: "Quy trình",
+  Payment: "Thanh toán",
+  Subscription: "Gói dịch vụ",
+  Organization: "Tổ chức",
+};
+
+function translateNotificationText(value?: string | null) {
+  if (!value) return "";
+  const exact = notificationTextMap[value.trim().toLowerCase()];
+  if (exact) return exact;
+
+  return value.replace(/\b[A-Za-z]+\b/g, (word) => {
+    const translated = notificationWordMap[word.toLowerCase()];
+    return translated ?? word;
+  });
+}
+
+function translateNotificationType(value?: string | null) {
+  if (!value) return "-";
+  return notificationTypeMap[value] ?? translateNotificationText(value);
+}
+
 function formatRelativeTime(value: string) {
   const sentAt = new Date(value).getTime();
   if (Number.isNaN(sentAt)) return "";
@@ -140,6 +199,8 @@ export function NotificationDropdown({
             const visual = getNotificationVisual(notification);
             const Icon = visual.icon;
             const isSelected = selectedNotification?.id === notification.id;
+            const title = translateNotificationText(notification.title);
+            const message = translateNotificationText(notification.message);
 
             return (
               <button
@@ -157,10 +218,10 @@ export function NotificationDropdown({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground leading-snug">
-                    {notification.title}
+                    {title}
                   </p>
                   <p className="text-sm text-muted-foreground leading-snug mt-0.5">
-                    {notification.message}
+                    {message}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {formatRelativeTime(notification.sentAt)}
@@ -181,10 +242,10 @@ export function NotificationDropdown({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">
-                  {selectedNotification.title}
+                  {translateNotificationText(selectedNotification.title)}
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {selectedNotification.message}
+                  {translateNotificationText(selectedNotification.message)}
                 </p>
               </div>
               <button
@@ -196,9 +257,11 @@ export function NotificationDropdown({
               </button>
             </div>
             <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-              <span>Loại: {selectedNotification.type || "-"}</span>
+              <span>Loại: {translateNotificationType(selectedNotification.type)}</span>
               <span>Người gửi: {selectedNotification.sender || "-"}</span>
-              <span>Nhóm: {selectedNotification.targetType || "-"}</span>
+              <span>
+                Nhóm: {translateNotificationType(selectedNotification.targetType)}
+              </span>
               <span>{formatRelativeTime(selectedNotification.sentAt)}</span>
             </div>
           </div>
