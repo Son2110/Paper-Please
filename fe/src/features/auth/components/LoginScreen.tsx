@@ -332,7 +332,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   type="email"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="admin@storyteller.com"
+                  placeholder="nguyenvana@example.com"
                   required
                   disabled={pending}
                   className={inputClass}
@@ -404,7 +404,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 <input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Ten hien thi"
+                  placeholder="Tên hiển thị"
                   disabled={pending}
                   className={inputClass}
                 />
