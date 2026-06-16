@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { activityLogApi, type ActivityLogDTO } from "@/api/activityLogApi";
 import { queryKeys } from "@/api/queryKeys";
+import { AppModal } from "@/shared/components/AppModal";
 
 const pageSize = 12;
 
@@ -75,6 +76,7 @@ export function AdminActivityLogScreen() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const logsQuery = useQuery({
     queryKey: queryKeys.admin.activityLogs,
@@ -86,6 +88,7 @@ export function AdminActivityLogScreen() {
     mutationFn: activityLogApi.clearAll,
     onSuccess: () => {
       toast.success("Đã xóa nhật ký hệ thống");
+      setShowClearConfirm(false);
       setPage(1);
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.activityLogs });
     },
@@ -147,8 +150,7 @@ export function AdminActivityLogScreen() {
   };
 
   const handleClearLogs = () => {
-    if (!window.confirm("Xóa toàn bộ nhật ký hệ thống?")) return;
-    clearMutation.mutate();
+    setShowClearConfirm(true);
   };
 
   return (
@@ -389,6 +391,44 @@ export function AdminActivityLogScreen() {
           </div>
         </div>
       </section>
+
+      <AppModal
+        open={showClearConfirm}
+        onOpenChange={(open) => {
+          if (!open && !clearMutation.isPending) setShowClearConfirm(false);
+        }}
+        title="Xóa nhật ký hoạt động"
+        description="Toàn bộ nhật ký hệ thống hiện có sẽ bị xóa."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(false)}
+              disabled={clearMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={() => clearMutation.mutate()}
+              disabled={clearMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {clearMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa nhật ký
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Thao tác này không thể hoàn tác. Hiện có {logs.length} nhật ký trong hệ thống.
+        </div>
+      </AppModal>
     </div>
   );
 }

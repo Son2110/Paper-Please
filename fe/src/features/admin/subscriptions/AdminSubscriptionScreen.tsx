@@ -354,6 +354,9 @@ export function AdminSubscriptionScreen() {
     useState<SubscriptionAnalyticsTab>("new");
   const [analyticsPage, setAnalyticsPage] = useState(1);
   const [recentPeriod, setRecentPeriod] = useState("30");
+  const [deletePlanTarget, setDeletePlanTarget] = useState<SubscriptionDTO | null>(
+    null,
+  );
 
   const plansQuery = useQuery({
     queryKey: queryKeys.admin.subscriptions.all,
@@ -493,6 +496,7 @@ export function AdminSubscriptionScreen() {
     mutationFn: subscriptionApi.delete,
     onSuccess: () => {
       toast.success("Đã xóa gói dịch vụ");
+      setDeletePlanTarget(null);
       invalidateSubscriptions();
     },
     onError: (err) => {
@@ -599,8 +603,12 @@ export function AdminSubscriptionScreen() {
   };
 
   const handleDelete = (plan: SubscriptionDTO) => {
-    if (!window.confirm(`Xóa gói ${plan.name}?`)) return;
-    deleteMutation.mutate(plan.id);
+    setDeletePlanTarget(plan);
+  };
+
+  const confirmDeletePlan = () => {
+    if (!deletePlanTarget) return;
+    deleteMutation.mutate(deletePlanTarget.id);
   };
 
   const handleSearchGrantUser = () => {
@@ -1357,6 +1365,50 @@ export function AdminSubscriptionScreen() {
           </div>
         </div>
       </section>
+
+      <AppModal
+        open={Boolean(deletePlanTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeletePlanTarget(null);
+        }}
+        title="Xóa gói dịch vụ"
+        description="Gói bị xóa sẽ không còn hiển thị để người dùng đăng ký."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeletePlanTarget(null)}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeletePlan}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa gói
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {deletePlanTarget?.name}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatMoney(deletePlanTarget?.price)} ·{" "}
+            {deletePlanTarget?.durationDays ?? 0} ngày
+          </p>
+        </div>
+      </AppModal>
 
       <AppModal
         open={formOpen}

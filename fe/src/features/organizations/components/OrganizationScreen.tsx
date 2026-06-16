@@ -117,6 +117,10 @@ export function OrganizationScreen() {
   });
   const [showDeleteOrganization, setShowDeleteOrganization] = useState(false);
   const [showEditOrganization, setShowEditOrganization] = useState(false);
+  const [removeMemberTarget, setRemoveMemberTarget] =
+    useState<OrganizationMemberDTO | null>(null);
+  const [deleteJobTitleTarget, setDeleteJobTitleTarget] =
+    useState<OrganizationJobTitleDTO | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [organizationEditForm, setOrganizationEditForm] =
     useState<OrganizationEditForm>({
@@ -335,6 +339,7 @@ export function OrganizationScreen() {
     mutationFn: organizationApi.removeMember,
     onSuccess: () => {
       toast.success("Đã xóa thành viên");
+      setRemoveMemberTarget(null);
       invalidateOrganization();
     },
     onError: (err) => {
@@ -346,6 +351,7 @@ export function OrganizationScreen() {
     mutationFn: organizationApi.deleteJobTitle,
     onSuccess: () => {
       toast.success("Đã xóa chức danh");
+      setDeleteJobTitleTarget(null);
       invalidateOrganization();
     },
     onError: (err) => {
@@ -405,7 +411,13 @@ export function OrganizationScreen() {
   const handleRemoveMember = (member: OrganizationMemberDTO) => {
     const membershipId = getMembershipId(member);
     if (!membershipId) return;
-    if (!window.confirm("Xóa thành viên này khỏi tổ chức?")) return;
+    setRemoveMemberTarget(member);
+  };
+
+  const confirmRemoveMember = () => {
+    if (!removeMemberTarget) return;
+    const membershipId = getMembershipId(removeMemberTarget);
+    if (!membershipId) return;
     removeMemberMutation.mutate(membershipId);
   };
 
@@ -430,8 +442,12 @@ export function OrganizationScreen() {
   };
 
   const handleDeleteJobTitle = (title: OrganizationJobTitleDTO) => {
-    if (!window.confirm(`Xóa chức danh "${title.name}"?`)) return;
-    deleteJobTitleMutation.mutate(title.id);
+    setDeleteJobTitleTarget(title);
+  };
+
+  const confirmDeleteJobTitle = () => {
+    if (!deleteJobTitleTarget) return;
+    deleteJobTitleMutation.mutate(deleteJobTitleTarget.id);
   };
 
   const handleDeleteOrganization = (event: React.FormEvent) => {
@@ -1140,6 +1156,96 @@ export function OrganizationScreen() {
           </form>
         </AppModal>
       )}
+
+      <AppModal
+        open={Boolean(removeMemberTarget)}
+        onOpenChange={(open) => {
+          if (!open && !removeMemberMutation.isPending) {
+            setRemoveMemberTarget(null);
+          }
+        }}
+        title="Xóa thành viên"
+        description="Thành viên sẽ không còn trong tổ chức đang chọn."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRemoveMemberTarget(null)}
+              disabled={removeMemberMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmRemoveMember}
+              disabled={removeMemberMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {removeMemberMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa thành viên
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {removeMemberTarget ? memberName(removeMemberTarget) : ""}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {removeMemberTarget?.user?.email || "Không có email"}
+          </p>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(deleteJobTitleTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleteJobTitleMutation.isPending) {
+            setDeleteJobTitleTarget(null);
+          }
+        }}
+        title="Xóa chức danh"
+        description="Chức danh bị xóa sẽ không còn dùng để gán cho thành viên."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteJobTitleTarget(null)}
+              disabled={deleteJobTitleMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteJobTitle}
+              disabled={deleteJobTitleMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleteJobTitleMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa chức danh
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {deleteJobTitleTarget?.name}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {deleteJobTitleTarget?.description || "Không có mô tả"}
+          </p>
+        </div>
+      </AppModal>
 
       {activeOrganization && (
         <AppModal

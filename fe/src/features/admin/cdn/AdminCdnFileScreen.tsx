@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cdnApi, type UploadedFileResponse } from "@/api/cdnApi";
+import { AppModal } from "@/shared/components/AppModal";
 
 const FILES_PER_PAGE = 10;
 
@@ -93,6 +94,9 @@ export function AdminCdnFileScreen() {
   const [query, setQuery] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<UploadedFileResponse | null>(
+    null,
+  );
 
   const filesQuery = useQuery({
     queryKey: ["admin-cdn-files", page, query, FILES_PER_PAGE],
@@ -126,6 +130,7 @@ export function AdminCdnFileScreen() {
     mutationFn: (savedName: string) => cdnApi.deleteFile(savedName),
     onSuccess: () => {
       toast.success("Đã xóa file");
+      setDeleteTarget(null);
       invalidate();
     },
     onError: (err) =>
@@ -142,8 +147,12 @@ export function AdminCdnFileScreen() {
   };
 
   const handleDelete = (file: UploadedFileResponse) => {
-    if (!window.confirm(`Xóa file ${file.originalName}?`)) return;
-    deleteMutation.mutate(file.savedName);
+    setDeleteTarget(file);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.savedName);
   };
 
   return (
@@ -327,6 +336,49 @@ export function AdminCdnFileScreen() {
           </div>
         </div>
       </section>
+
+      <AppModal
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteTarget(null);
+        }}
+        title="Xóa file hệ thống"
+        description="File sẽ bị xóa khỏi CDN và không thể mở lại bằng đường dẫn hiện tại."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa file
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {deleteTarget?.originalName}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {deleteTarget?.savedName} · {formatBytes(deleteTarget?.sizeBytes)}
+          </p>
+        </div>
+      </AppModal>
     </div>
   );
 }
