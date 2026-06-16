@@ -261,6 +261,14 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const [editDescription, setEditDescription] = useState("");
   const [editDueDate, setEditDueDate] = useState<string | undefined>(undefined);
   const [editStatus, setEditStatus] = useState<DocumentStatus>("Draft");
+  const [removeParticipantTarget, setRemoveParticipantTarget] =
+    useState<DocumentParticipantDTO | null>(null);
+  const [showCancelWorkflowConfirm, setShowCancelWorkflowConfirm] =
+    useState(false);
+  const [deleteCommentTargetId, setDeleteCommentTargetId] = useState<
+    string | null
+  >(null);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.documents.detail(docId),
@@ -427,11 +435,15 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     participant: DocumentParticipantDTO,
   ) => {
     if (participant.accessLevel === "Owner") return;
-    if (!window.confirm("Bạn có chắc muốn gỡ người này khỏi tài liệu?")) return;
+    setRemoveParticipantTarget(participant);
+  };
 
+  const confirmRemoveParticipant = async () => {
+    if (!removeParticipantTarget) return;
     try {
-      await documentApi.removeParticipant(docId, participant.userId);
+      await documentApi.removeParticipant(docId, removeParticipantTarget.userId);
       toast.success("Đã gỡ người tham gia.");
+      setRemoveParticipantTarget(null);
       await refreshDetail();
     } catch (err) {
       toast.error(
@@ -495,11 +507,14 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   };
 
   const handleCancelWorkflow = async () => {
-    if (!window.confirm("Bạn có chắc muốn hủy quy trình đang xử lý?")) return;
+    setShowCancelWorkflowConfirm(true);
+  };
 
+  const confirmCancelWorkflow = async () => {
     try {
       await documentApi.cancelWorkflow(docId);
       toast.success("Đã hủy quy trình.");
+      setShowCancelWorkflowConfirm(false);
       await refreshDetail();
     } catch (err) {
       toast.error(
@@ -544,15 +559,23 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm("Xóa bình luận này?")) return;
+    setDeleteCommentTargetId(commentId);
+  };
+
+  const confirmDeleteComment = async () => {
+    if (!deleteCommentTargetId) return;
+    setIsDeletingComment(true);
     try {
-      await documentApi.deleteComment(commentId);
+      await documentApi.deleteComment(deleteCommentTargetId);
       toast.success("Đã xóa bình luận.");
+      setDeleteCommentTargetId(null);
       await refreshDetail();
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Không thể xóa bình luận.",
       );
+    } finally {
+      setIsDeletingComment(false);
     }
   };
 
@@ -1289,6 +1312,119 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
           </section>
         )}
       </div>
+      <AppModal
+        open={Boolean(removeParticipantTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRemoveParticipantTarget(null);
+        }}
+        title="Gỡ người tham gia"
+        description="Người này sẽ không còn trong danh sách truy cập tài liệu."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRemoveParticipantTarget(null)}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmRemoveParticipant}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90"
+            >
+              <X className="h-4 w-4" />
+              Gỡ người này
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {removeParticipantTarget?.displayName ||
+              removeParticipantTarget?.email ||
+              removeParticipantTarget?.userId}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {removeParticipantTarget?.email || "Không có email"}
+          </p>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={showCancelWorkflowConfirm}
+        onOpenChange={(open) => {
+          if (!open) setShowCancelWorkflowConfirm(false);
+        }}
+        title="Hủy quy trình xử lý"
+        description="Quy trình đang xử lý của tài liệu này sẽ bị hủy."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowCancelWorkflowConfirm(false)}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted"
+            >
+              Giữ quy trình
+            </button>
+            <button
+              type="button"
+              onClick={confirmCancelWorkflow}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90"
+            >
+              <XCircle className="h-4 w-4" />
+              Hủy quy trình
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {document?.title || "Tài liệu hiện tại"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {currentWorkflow?.steps.length ?? 0} bước xử lý
+          </p>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(deleteCommentTargetId)}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingComment) setDeleteCommentTargetId(null);
+        }}
+        title="Xóa bình luận"
+        description="Bình luận này sẽ bị xóa khỏi phần trao đổi."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteCommentTargetId(null)}
+              disabled={isDeletingComment}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteComment}
+              disabled={isDeletingComment}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isDeletingComment ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Xóa bình luận
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Thao tác này không thể hoàn tác.
+        </div>
+      </AppModal>
     </>
   );
 }
@@ -1539,7 +1675,6 @@ function CommentItem({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Xóa bình luận này?")) return;
     await onDelete?.(comment.id);
   };
 

@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { userApi } from "@/api/userApi";
 import { subscriptionApi } from "@/api/subscriptionApi";
 import { queryKeys } from "@/api/queryKeys";
+import { AppModal } from "@/shared/components/AppModal";
 
 const tabs = [
   { id: "profile", label: "Thông tin cá nhân", icon: User },
@@ -49,6 +50,8 @@ export function SettingsScreen() {
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+  const [showCancelSubscriptionConfirm, setShowCancelSubscriptionConfirm] =
+    useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -127,13 +130,12 @@ export function SettingsScreen() {
   };
 
   const handleCancelSubscription = async () => {
-    if (!window.confirm("Hủy gói dịch vụ hiện tại?")) return;
-
     setIsCancellingSubscription(true);
     try {
       await subscriptionApi.cancelMine();
       queryClient.setQueryData(queryKeys.subscriptions.mine, null);
       queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.mine });
+      setShowCancelSubscriptionConfirm(false);
       toast.success("Đã hủy gói dịch vụ hiện tại");
     } catch (err) {
       const message =
@@ -322,7 +324,7 @@ export function SettingsScreen() {
                 </div>
 
                 <button
-                  onClick={handleCancelSubscription}
+                  onClick={() => setShowCancelSubscriptionConfirm(true)}
                   disabled={isCancellingSubscription}
                   className="mt-5 inline-flex items-center gap-2 border border-destructive/40 text-destructive px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -491,6 +493,52 @@ export function SettingsScreen() {
         
       </div>
 
+      <AppModal
+        open={showCancelSubscriptionConfirm}
+        onOpenChange={(open) => {
+          if (!open && !isCancellingSubscription) {
+            setShowCancelSubscriptionConfirm(false);
+          }
+        }}
+        title="Hủy gói dịch vụ"
+        description="Gói hiện tại sẽ bị hủy trên tài khoản của bạn."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowCancelSubscriptionConfirm(false)}
+              disabled={isCancellingSubscription}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Giữ lại
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelSubscription}
+              disabled={isCancellingSubscription}
+              className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCancellingSubscription ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              Hủy gói
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {subscription?.subscription?.name || "Gói dịch vụ hiện tại"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {subscription?.subscription?.price != null
+              ? formatCurrency(subscription.subscription.price)
+              : "Không có thông tin giá"}
+          </p>
+        </div>
+      </AppModal>
     </div>
   );
 }
