@@ -236,6 +236,10 @@ function getMemberLabel(member: OrganizationMemberDTO) {
   );
 }
 
+function isOrganizationOwnerRole(role?: OrganizationMemberDTO["role"] | null) {
+  return String(role).toLowerCase() === "owner" || String(role) === "3";
+}
+
 export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const queryClient = useQueryClient();
   const { activeOrganization } = useOrganization();
@@ -261,7 +265,6 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDueDate, setEditDueDate] = useState<string | undefined>(undefined);
-  const [editStatus, setEditStatus] = useState<DocumentStatus>("Draft");
   const [removeParticipantTarget, setRemoveParticipantTarget] =
     useState<DocumentParticipantDTO | null>(null);
   const [showCancelWorkflowConfirm, setShowCancelWorkflowConfirm] =
@@ -352,6 +355,26 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
       return userId && !participantIds.has(userId);
     });
   }, [organizationMembers, participants]);
+  const currentOrgMember = useMemo(
+    () =>
+      organizationMembers.find((member) => getMemberUserId(member) === user?.id),
+    [organizationMembers, user?.id],
+  );
+  const currentParticipant = useMemo(
+    () => participants.find((participant) => participant.userId === user?.id),
+    [participants, user?.id],
+  );
+  const isDocumentCreator = Boolean(user?.id && document?.ownerId === user.id);
+  const isOrganizationOwner = Boolean(
+    user?.id &&
+      (activeOrganization?.owner?.id === user.id ||
+        isOrganizationOwnerRole(currentOrgMember?.role)),
+  );
+  const canManageDocumentAccess = isDocumentCreator || isOrganizationOwner;
+  const canEditFiles =
+    canManageDocumentAccess ||
+    currentParticipant?.accessLevel === "Owner" ||
+    currentParticipant?.accessLevel === "Editor";
 
   const refreshDetail = () =>
     queryClient.invalidateQueries({
@@ -367,6 +390,11 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   };
 
   const handleUploadVersion = async () => {
+    if (!canEditFiles) {
+      toast.error("Bạn không có quyền cập nhật tệp của tài liệu này.");
+      return;
+    }
+
     if (!versionFile) {
       toast.error("Vui lòng chọn file phiên bản mới.");
       return;
@@ -592,7 +620,6 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
       setEditTitle(document.title);
       setEditDescription(document.description || "");
       setEditDueDate(document.dueDate || undefined);
-      setEditStatus(document.status);
       setIsEditModalOpen(true);
     }
   };
@@ -602,6 +629,8 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   };
 
   const handleUpdateDocument = async () => {
+    if (!document) return;
+
     if (!editTitle.trim()) {
       toast.error("Vui lòng nhập tiêu đề.");
       return;
@@ -612,7 +641,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         dueDate: editDueDate || undefined,
-        status: editStatus,
+        status: document.status,
       });
       toast.success("Đã cập nhật tài liệu.");
       closeEditModal();
@@ -684,7 +713,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div>
             <div>
               <label className="mb-1 block text-sm font-medium text-foreground">
                 Hạn xử lý
@@ -695,25 +724,6 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                 onChange={(e) => setEditDueDate(e.target.value || undefined)}
                 className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">
-                Trạng thái
-              </label>
-              <select
-                value={editStatus}
-                onChange={(e) =>
-                  setEditStatus(e.target.value as DocumentStatus)
-                }
-                className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </div>
@@ -927,6 +937,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
               <div className="space-y-5 p-5">
                 <DocumentPreview version={previewVersion} />
 
+                {canEditFiles && (
                 <details className="rounded-lg border bg-background p-4">
                   <summary className="cursor-pointer text-sm font-semibold text-foreground">
                     Upload phiên bản mới
@@ -962,6 +973,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                     </button>
                   </div>
                 </details>
+                )}
 
                 <div className="divide-y rounded-lg border">
                   {versions.length === 0 && (
@@ -1181,6 +1193,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                   </div>
                 </section>
 
+                {canManageDocumentAccess && (
                 <details className="rounded-lg border bg-background p-4">
                   <summary className="cursor-pointer text-sm font-semibold text-foreground">
                     Thành viên và quyền truy cập ({participants.length})
@@ -1289,6 +1302,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                     </div>
                   </div>
                 </details>
+                )}
 
                 <details className="rounded-lg border bg-background p-4">
                   <summary className="cursor-pointer text-sm font-semibold text-foreground">

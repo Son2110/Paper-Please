@@ -90,12 +90,17 @@ export function DashboardScreen({
   });
 
   const pendingTasksQuery = useQuery({
-    queryKey: queryKeys.documents.pendingTasks({ page: 1, pageSize: 50 }),
+    queryKey: queryKeys.documents.pendingTasks({
+      organizationId,
+      page: 1,
+      pageSize: 50,
+    }),
     queryFn: () =>
       documentApi.getMyPendingTasks({
         page: 1,
         pageSize: 50,
       }),
+    enabled: Boolean(organizationId),
     staleTime: 15_000,
   });
 
@@ -106,6 +111,19 @@ export function DashboardScreen({
   const pendingTasks = useMemo(
     () => pendingTasksQuery.data?.items ?? [],
     [pendingTasksQuery.data?.items],
+  );
+  const organizationDocumentIds = useMemo(
+    () => new Set(documents.map((document) => document.id)),
+    [documents],
+  );
+  const scopedPendingTasks = useMemo(
+    () =>
+      pendingTasks.filter(
+        (task) =>
+          organizationDocumentIds.has(task.documentId) ||
+          task.organizationName === activeOrganization?.name,
+      ),
+    [activeOrganization?.name, organizationDocumentIds, pendingTasks],
   );
 
   const myDocuments = useMemo(
@@ -120,8 +138,8 @@ export function DashboardScreen({
   );
 
   const pendingTaskDocumentIds = useMemo(
-    () => new Set(pendingTasks.map((task) => task.documentId)),
-    [pendingTasks],
+    () => new Set(scopedPendingTasks.map((task) => task.documentId)),
+    [scopedPendingTasks],
   );
 
   const relevantDocuments = useMemo(
@@ -161,12 +179,12 @@ export function DashboardScreen({
 
   const isInitialLoading =
     (documentsQuery.isLoading && documents.length === 0) ||
-    (pendingTasksQuery.isLoading && pendingTasks.length === 0);
+    (pendingTasksQuery.isLoading && scopedPendingTasks.length === 0);
 
   const stats = [
     {
       label: "Cần tôi xử lý",
-      value: pendingTasks.length,
+      value: scopedPendingTasks.length,
       icon: Clock,
       filter: "cho-duyet",
     },
@@ -268,14 +286,14 @@ export function DashboardScreen({
                 </p>
               </div>
               <div className="divide-y">
-                {pendingTasks.length === 0 && (
+                {scopedPendingTasks.length === 0 && (
                   <EmptyPanel
                     icon={Inbox}
                     title="Không có việc cần xử lý"
                     description="Khi có tài liệu chờ bạn xử lý, danh sách sẽ hiện ở đây."
                   />
                 )}
-                {pendingTasks.slice(0, 5).map((task) => (
+                {scopedPendingTasks.slice(0, 5).map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}

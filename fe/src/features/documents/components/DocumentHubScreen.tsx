@@ -193,7 +193,7 @@ export function DocumentHubScreen({
   const documentsQuery = useQuery({
     queryKey: isRepository
       ? queryKeys.documents.list(organizationId, documentFilters)
-      : ["documents", "mine", documentFilters],
+      : ["documents", "mine", organizationId ?? "none", documentFilters],
     queryFn: () =>
       isRepository
         ? documentApi.getOrganizationDocuments(organizationId ?? "", {
@@ -208,7 +208,7 @@ export function DocumentHubScreen({
             page: documentFilters.page,
             pageSize: documentFilters.pageSize,
           }),
-    enabled: isRepository ? Boolean(organizationId) : true,
+    enabled: Boolean(organizationId),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -227,10 +227,11 @@ export function DocumentHubScreen({
     staleTime: 2 * 60_000,
   });
 
-  const documents = useMemo(
-    () => documentsQuery.data?.items ?? [],
-    [documentsQuery.data?.items],
-  );
+  const documents = useMemo(() => {
+    const items = documentsQuery.data?.items ?? [];
+    if (isRepository) return items;
+    return items.filter((document) => document.organizationId === organizationId);
+  }, [documentsQuery.data?.items, isRepository, organizationId]);
   const organizationMembers = useMemo(
     () => membersQuery.data?.items ?? [],
     [membersQuery.data?.items],

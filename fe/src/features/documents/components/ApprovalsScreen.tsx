@@ -13,11 +13,13 @@ import {
 import { toast } from "sonner";
 import {
   documentApi,
+  type DocumentDTO,
   type PendingWorkflowTaskDTO,
   type WorkflowStepType,
 } from "@/api/documentApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
+import { useOrganization } from "@/context/OrganizationContext";
 import type { Document } from "@/pages/Index";
 
 interface ApprovalsProps {
@@ -58,6 +60,8 @@ function getDaysPending(dateString?: string | null): string {
 
 export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
   const queryClient = useQueryClient();
+  const { activeOrganization } = useOrganization();
+  const organizationId = activeOrganization?.id;
   const [selectedTask, setSelectedTask] =
     useState<PendingWorkflowTaskDTO | null>(null);
   const [action, setAction] = useState<"Approved" | "Rejected" | null>(null);
@@ -65,27 +69,67 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const tasksQuery = useQuery({
-    queryKey: queryKeys.documents.pendingTasks({ page: 1, pageSize: 50 }),
+    queryKey: queryKeys.documents.pendingTasks({
+      organizationId,
+      page: 1,
+      pageSize: 50,
+    }),
     queryFn: () =>
       documentApi.getMyPendingTasks({
         page: 1,
         pageSize: 50,
       }),
+    enabled: Boolean(organizationId),
     staleTime: 15_000,
   });
 
+  const organizationDocumentsQuery = useQuery({
+    queryKey: queryKeys.documents.list(organizationId, {
+      page: 1,
+      pageSize: 200,
+    }),
+    queryFn: () =>
+      documentApi.getOrganizationDocuments(organizationId ?? "", {
+        page: 1,
+        pageSize: 200,
+      }),
+    enabled: Boolean(organizationId),
+    staleTime: 30_000,
+  });
+
   const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data?.items]);
-  const isLoading = tasksQuery.isLoading || tasksQuery.isFetching;
+  const organizationDocuments = useMemo<DocumentDTO[]>(
+    () => organizationDocumentsQuery.data?.items ?? [],
+    [organizationDocumentsQuery.data?.items],
+  );
+  const organizationDocumentIds = useMemo(
+    () => new Set(organizationDocuments.map((document) => document.id)),
+    [organizationDocuments],
+  );
+  const scopedTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          organizationDocumentIds.has(task.documentId) ||
+          task.organizationName === activeOrganization?.name,
+      ),
+    [activeOrganization?.name, organizationDocumentIds, tasks],
+  );
+  const isLoading =
+    tasksQuery.isLoading ||
+    tasksQuery.isFetching ||
+    organizationDocumentsQuery.isLoading ||
+    organizationDocumentsQuery.isFetching;
   const error = tasksQuery.error instanceof Error ? tasksQuery.error.message : null;
 
   const sortedTasks = useMemo(
     () =>
-      [...tasks].sort(
+      [...scopedTasks].sort(
         (a, b) =>
           new Date(a.createdDate ?? 0).getTime() -
           new Date(b.createdDate ?? 0).getTime(),
       ),
-    [tasks],
+    [scopedTasks],
   );
 
   const openActionModal = (
