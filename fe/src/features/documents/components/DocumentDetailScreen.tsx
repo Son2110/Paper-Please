@@ -301,15 +301,18 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     detailQuery.error instanceof Error ? detailQuery.error.message : null;
 
   const document = detail?.document;
-  const versions = useMemo(() => detail?.versions ?? [], [detail?.versions]);
+  const versions = useMemo(
+    () => (Array.isArray(detail?.versions) ? detail.versions : []),
+    [detail?.versions],
+  );
   const participants = useMemo(
-    () => detail?.participants ?? [],
+    () => (Array.isArray(detail?.participants) ? detail.participants : []),
     [detail?.participants],
   );
-  const workflows = detail?.workflows ?? [];
+  const workflows = Array.isArray(detail?.workflows) ? detail.workflows : [];
   const currentWorkflow = workflows[0] ?? null;
-  const comments = detail?.comments ?? [];
-  const audits = detail?.audits ?? [];
+  const comments = Array.isArray(detail?.comments) ? detail.comments : [];
+  const audits = Array.isArray(detail?.audits) ? detail.audits : [];
   const currentVersion = useMemo(
     () =>
       versions.find((version) => version.isCurrent) ??
@@ -331,12 +334,15 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const workflowSubmitLabel = isRejectedDocument
     ? "Nộp lại tài liệu"
     : "Tạo quy trình";
-  const pendingStep = currentWorkflow?.steps.find(
+  const currentWorkflowSteps = Array.isArray(currentWorkflow?.steps)
+    ? currentWorkflow.steps
+    : [];
+  const pendingStep = currentWorkflowSteps.find(
     (step) => step.status === "Pending",
   );
-  const completedSteps =
-    currentWorkflow?.steps.filter((step) => step.status !== "Pending").length ??
-    0;
+  const completedSteps = currentWorkflowSteps.filter(
+    (step) => step.status !== "Pending",
+  ).length;
 
   const availableMembers = useMemo(() => {
     const participantIds = new Set(participants.map((item) => item.userId));
@@ -1002,7 +1008,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                           Quy trình đang chạy
                         </p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {completedSteps}/{currentWorkflow.steps.length} bước
+                          {completedSteps}/{currentWorkflowSteps.length} bước
                           đã xử lý.
                         </p>
                       </div>
@@ -1017,7 +1023,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                         </button>
                       )}
                     </div>
-                    <WorkflowSteps steps={currentWorkflow.steps} />
+                    <WorkflowSteps steps={currentWorkflowSteps} />
                   </div>
                 )}
 
@@ -1383,7 +1389,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
             {document?.title || "Tài liệu hiện tại"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {currentWorkflow?.steps.length ?? 0} bước xử lý
+            {currentWorkflowSteps.length} bước xử lý
           </p>
         </div>
       </AppModal>
@@ -1575,9 +1581,11 @@ function WorkflowSteps({
 }: {
   steps: DocumentDetailDTO["workflows"][number]["steps"];
 }) {
+  const safeSteps = Array.isArray(steps) ? steps : [];
+
   return (
     <div className="divide-y rounded-lg border">
-      {steps.map((step) => (
+      {safeSteps.map((step) => (
         <div
           key={step.id}
           className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between"
@@ -1646,6 +1654,7 @@ function CommentItem({
   const [editContent, setEditContent] = useState(comment.content);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isOwnComment = canEdit;
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
 
   const handleReplySubmit = async () => {
     if (isOwnComment) {
@@ -1786,13 +1795,13 @@ function CommentItem({
           </div>
         </div>
       )}
-      {comment.replies.length > 0 && (
+      {replies.length > 0 && (
         <details className="mt-3 border-l pl-3">
           <summary className="cursor-pointer text-sm font-medium text-foreground">
-            {comment.replies.length} phản hồi
+            {replies.length} phản hồi
           </summary>
           <div className="mt-2 space-y-2">
-            {comment.replies.map((reply) => (
+            {replies.map((reply) => (
               <CommentItem
                 key={reply.id}
                 comment={reply}
