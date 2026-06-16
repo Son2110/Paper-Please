@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { cdnApi } from "@/api/cdnApi";
 import {
   documentApi,
+  type DocumentAccessLevel,
   type DocumentDTO,
   type DocumentStatus,
   type WorkflowStepType,
@@ -49,6 +50,7 @@ interface WorkflowAssigneeRow {
   id: string;
   userId: string;
   stepType: WorkflowStepType;
+  accessLevel: Exclude<DocumentAccessLevel, "Owner">;
 }
 
 const emptyCreateForm: CreateFormState = {
@@ -83,11 +85,17 @@ const workflowTypeLabels: Record<WorkflowStepType, string> = {
   Acknowledge: "Xác nhận đã đọc",
 };
 
+const workflowAccessLabels: Record<Exclude<DocumentAccessLevel, "Owner">, string> = {
+  Viewer: "Chỉ xem",
+  Editor: "Có thể sửa",
+};
+
 function createWorkflowRow(): WorkflowAssigneeRow {
   return {
     id: crypto.randomUUID(),
     userId: "",
     stepType: "Approve",
+    accessLevel: "Viewer",
   };
 }
 
@@ -289,14 +297,18 @@ export function DocumentHubScreen({
         changeSummary: createForm.changeSummary.trim() || "Phiên bản đầu tiên",
       });
 
-      const uniqueAssignees = Array.from(
-        new Set(selectedWorkflowSteps.map((step) => step.assignedToId)),
-      ).filter((userId) => userId && userId !== user?.id);
+      const accessByAssignee = new Map<string, Exclude<DocumentAccessLevel, "Owner">>();
+      workflowRows.forEach((row) => {
+        if (!row.userId || row.userId === user?.id) return;
+        const currentAccess = accessByAssignee.get(row.userId);
+        if (currentAccess === "Editor") return;
+        accessByAssignee.set(row.userId, row.accessLevel);
+      });
 
-      for (const assigneeId of uniqueAssignees) {
+      for (const [assigneeId, accessLevel] of accessByAssignee) {
         await documentApi.addParticipant(document.id, {
           userId: assigneeId,
-          accessLevel: "Viewer",
+          accessLevel,
         });
       }
 
@@ -677,14 +689,14 @@ export function DocumentHubScreen({
                   Quy trình xử lý
                 </summary>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Chọn ít nhất một người phê duyệt để nộp tài liệu.
+                  Chọn người phê duyệt và quyền truy cập tài liệu của từng người.
                 </p>
 
                 <div className="mt-4 space-y-3">
                   {workflowRows.map((row, index) => (
                     <div
                       key={row.id}
-                      className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_auto_auto] md:items-center"
+                      className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_150px_auto_auto] md:items-center"
                     >
                       <div className="text-sm font-semibold text-muted-foreground">
                         Bước {index + 1}
@@ -720,6 +732,27 @@ export function DocumentHubScreen({
                       <span className="inline-flex h-10 items-center rounded-lg border bg-background px-3 text-sm font-semibold text-muted-foreground">
                         {workflowTypeLabels.Approve}
                       </span>
+                      <select
+                        value={row.accessLevel}
+                        onChange={(event) =>
+                          setWorkflowRows((prev) =>
+                            prev.map((item) =>
+                              item.id === row.id
+                                ? {
+                                    ...item,
+                                    accessLevel: event.target
+                                      .value as Exclude<DocumentAccessLevel, "Owner">,
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        title="Quyền truy cập tài liệu"
+                      >
+                        <option value="Viewer">{workflowAccessLabels.Viewer}</option>
+                        <option value="Editor">{workflowAccessLabels.Editor}</option>
+                      </select>
                       <button
                         type="button"
                         onClick={() =>
