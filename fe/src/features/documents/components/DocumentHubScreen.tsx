@@ -140,6 +140,7 @@ export function DocumentHubScreen({
   ]);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentDTO | null>(null);
 
   const organizationId = activeOrganization?.id;
   const isRepository = mode === "repository";
@@ -345,12 +346,14 @@ export function DocumentHubScreen({
     }
   };
 
-  const handleDelete = async (documentId: string) => {
-    if (!window.confirm("Bạn có chắc muốn xóa tài liệu này?")) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
+    const documentId = deleteTarget.id;
     setDeletingId(documentId);
     try {
       await documentApi.deleteDocument(documentId);
+      setDeleteTarget(null);
       toast.success("Đã xóa tài liệu.");
       await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
     } catch (err) {
@@ -522,7 +525,7 @@ export function DocumentHubScreen({
                         </IconButton>
                         <IconButton
                           label="Xóa tài liệu"
-                          onClick={() => handleDelete(document.id)}
+                          onClick={() => setDeleteTarget(document)}
                           disabled={deletingId === document.id}
                           danger
                         >
@@ -562,6 +565,45 @@ export function DocumentHubScreen({
           </table>
         </div>
       </section>
+
+      <AppModal
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deletingId) setDeleteTarget(null);
+        }}
+        title="Xóa tài liệu"
+        description="Tài liệu sau khi xóa sẽ không còn hiển thị trong danh sách."
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              disabled={Boolean(deletingId)}
+              className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={Boolean(deletingId)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-destructive px-4 text-sm font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-60"
+            >
+              {deletingId && <Loader2 className="h-4 w-4 animate-spin" />}
+              Xóa tài liệu
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border bg-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {deleteTarget?.title}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {deleteTarget?.description || "Tài liệu không có mô tả."}
+          </p>
+        </div>
+      </AppModal>
 
       <AppModal
         open={showCreateModal}
