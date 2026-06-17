@@ -92,6 +92,13 @@ const statusClasses: Record<DocumentStatus, string> = {
   Archived: "border-slate-200 bg-slate-50 text-slate-600",
 };
 
+const submissionStatusFilters: DocumentStatus[] = [
+  "Draft",
+  "InProgress",
+  "Completed",
+  "Rejected",
+];
+
 const workflowTypeLabels: Record<WorkflowStepType, string> = {
   Review: "Xem xét",
   Approve: "Phê duyệt",
@@ -562,9 +569,9 @@ export function DocumentHubScreen({
               className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:w-52"
             >
               <option value="">Tất cả trạng thái</option>
-              {Object.entries(statusLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {submissionStatusFilters.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabels[status]}
                 </option>
               ))}
             </select>
