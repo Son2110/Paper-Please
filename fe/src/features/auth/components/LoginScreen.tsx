@@ -430,7 +430,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium text-foreground">
+                  <label className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
                     Email
                   </label>
                   <input
@@ -472,8 +472,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   <label className="text-sm font-medium text-foreground">
                     Mật khẩu
                   </label>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>Quy tắc mật khẩu</span>
+                  <span className="ml-1.5 inline-flex items-center text-muted-foreground">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -489,7 +488,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                         {passwordRuleText}
                       </TooltipContent>
                     </Tooltip>
-                  </div>
+                  </span>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}

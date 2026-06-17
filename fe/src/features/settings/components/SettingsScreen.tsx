@@ -392,8 +392,7 @@ export function SettingsScreen() {
                 <label className="text-sm font-medium text-foreground">
                   Mật khẩu mới
                 </label>
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>Quy tắc mật khẩu</span>
+                <span className="ml-1.5 inline-flex items-center text-muted-foreground">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -408,7 +407,7 @@ export function SettingsScreen() {
                       {passwordRuleText}
                     </TooltipContent>
                   </Tooltip>
-                </div>
+                </span>
                 <input
                   type="password"
                   value={passwordForm.newPassword}
