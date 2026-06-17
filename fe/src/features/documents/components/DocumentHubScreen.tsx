@@ -156,6 +156,7 @@ export function DocumentHubScreen({
   const { user } = useAuth();
   const { activeOrganization } = useOrganization();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "">("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
@@ -183,11 +184,11 @@ export function DocumentHubScreen({
       pageSize: number;
     } => ({
       searchQuery: searchQuery.trim(),
-      status: isRepository ? ("Completed" as DocumentStatus) : "",
+      status: isRepository ? ("Completed" as DocumentStatus) : statusFilter,
       page: 1,
       pageSize: 50,
     }),
-    [isRepository, searchQuery],
+    [isRepository, searchQuery, statusFilter],
   );
 
   const documentsQuery = useQuery({
@@ -552,6 +553,22 @@ export function DocumentHubScreen({
               className="h-10 w-full rounded-lg border bg-background pl-10 pr-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
             />
           </div>
+          {isSubmissions && (
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as DocumentStatus | "")
+              }
+              className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 md:w-52"
+            >
+              <option value="">Tất cả trạng thái</option>
+              {Object.entries(statusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {error && (

@@ -15,6 +15,10 @@ import {
 } from "@/api/notificationApi";
 import { queryKeys } from "@/api/queryKeys";
 import { useAuth } from "@/context/AuthContext";
+import {
+  translateNotificationText as localizeNotificationText,
+  translateNotificationType as localizeNotificationType,
+} from "@/shared/lib/notificationText";
 
 interface NotificationDropdownProps {
   open: boolean;
@@ -85,19 +89,11 @@ const notificationTypeMap: Record<string, string> = {
 };
 
 function translateNotificationText(value?: string | null) {
-  if (!value) return "";
-  const exact = notificationTextMap[value.trim().toLowerCase()];
-  if (exact) return exact;
-
-  return value.replace(/\b[A-Za-z]+\b/g, (word) => {
-    const translated = notificationWordMap[word.toLowerCase()];
-    return translated ?? word;
-  });
+  return localizeNotificationText(value);
 }
 
 function translateNotificationType(value?: string | null) {
-  if (!value) return "-";
-  return notificationTypeMap[value] ?? translateNotificationText(value);
+  return localizeNotificationType(value);
 }
 
 function formatRelativeTime(value: string) {

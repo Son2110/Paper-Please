@@ -67,6 +67,10 @@ function statusLabel(status: DocumentStatus) {
   return "Lưu trữ";
 }
 
+function isActiveDeadlineStatus(status: DocumentStatus) {
+  return status === "InProgress" || status === "WaitingSignature";
+}
+
 export function DashboardScreen({
   onNavigateWithFilter,
   onOpenDetail,
@@ -163,10 +167,10 @@ export function DashboardScreen({
   const dueSoonDocuments = useMemo(
     () =>
       [...relevantDocuments]
-        .filter((document) => document.status !== "Rejected")
+        .filter((document) => isActiveDeadlineStatus(document.status))
         .filter((document) => {
           const days = getDaysUntil(document.dueDate);
-          return days == null || days <= 14;
+          return days != null && days <= 14;
         })
         .sort((a, b) => {
           const left = getDaysUntil(a.dueDate) ?? Number.MAX_SAFE_INTEGER;

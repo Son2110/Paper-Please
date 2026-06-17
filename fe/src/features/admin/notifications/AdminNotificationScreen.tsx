@@ -19,6 +19,10 @@ import {
 } from "@/api/notificationApi";
 import { queryKeys } from "@/api/queryKeys";
 import type { UserDTO } from "@/api/userApi";
+import {
+  translateNotificationText,
+  translateNotificationType,
+} from "@/shared/lib/notificationText";
 
 const notificationTypes = [
   { value: "System", label: "Hệ thống" },
@@ -54,7 +58,10 @@ function findLabel(
   options: { value: string; label: string }[],
   value?: string | null,
 ) {
-  return options.find((item) => item.value === value)?.label || value || "-";
+  return (
+    options.find((item) => item.value === value)?.label ||
+    translateNotificationType(value)
+  );
 }
 
 function typeClass(type?: string) {
@@ -75,9 +82,11 @@ function SentNotificationRow({ item }: { item: NotificationDTO }) {
   return (
     <tr className="border-t align-top">
       <td className="px-4 py-3">
-        <div className="font-medium text-foreground">{item.title}</div>
+        <div className="font-medium text-foreground">
+          {translateNotificationText(item.title)}
+        </div>
         <div className="mt-1 line-clamp-2 max-w-xl text-xs text-muted-foreground">
-          {item.message}
+          {translateNotificationText(item.message)}
         </div>
       </td>
       <td className="px-4 py-3">
