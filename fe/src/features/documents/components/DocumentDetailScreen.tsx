@@ -223,6 +223,18 @@ function buildOfficeViewerUrl(fileUrl: string) {
   return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
 }
 
+function getTodayInputDate() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isPastInputDate(value?: string | null) {
+  return Boolean(value && value < getTodayInputDate());
+}
+
 function getMemberUserId(member: OrganizationMemberDTO) {
   return member.user?.id ?? "";
 }
@@ -475,6 +487,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
 
   const confirmRemoveParticipant = async () => {
     if (!removeParticipantTarget) return;
+
     try {
       await documentApi.removeParticipant(docId, removeParticipantTarget.userId);
       toast.success("Đã gỡ người tham gia.");
@@ -637,6 +650,11 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     }
 
     try {
+      if (isPastInputDate(editDueDate?.split("T")[0])) {
+        toast.error("Hạn xử lý không được là ngày trong quá khứ.");
+        return;
+      }
+
       await documentApi.updateDocument(docId, {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
@@ -720,6 +738,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
               </label>
               <input
                 type="date"
+                min={getTodayInputDate()}
                 value={editDueDate?.split("T")[0] || ""}
                 onChange={(e) => setEditDueDate(e.target.value || undefined)}
                 className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"

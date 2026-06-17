@@ -5,6 +5,7 @@ import {
     Save,
   XCircle,
   KeyRound,
+  CircleHelp,
   Loader2,
   Trash2,
   CreditCard,
@@ -16,6 +17,11 @@ import { userApi } from "@/api/userApi";
 import { subscriptionApi } from "@/api/subscriptionApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const tabs = [
   { id: "profile", label: "Thông tin cá nhân", icon: User },
@@ -36,6 +42,9 @@ const formatCurrency = (value?: number | null) =>
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(value ?? 0);
+
+const passwordRuleText =
+  "Mật khẩu tối thiểu 6 ký tự, nên có chữ hoa, chữ thường, số và ký tự đặc biệt.";
 
 export function SettingsScreen() {
   const queryClient = useQueryClient();
@@ -383,6 +392,23 @@ export function SettingsScreen() {
                 <label className="text-sm font-medium text-foreground">
                   Mật khẩu mới
                 </label>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>Quy tắc mật khẩu</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex transition-colors hover:text-foreground"
+                        aria-label="Quy tắc đặt mật khẩu"
+                      >
+                        <CircleHelp className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-64 text-sm">
+                      {passwordRuleText}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <input
                   type="password"
                   value={passwordForm.newPassword}

@@ -155,6 +155,18 @@ function getFileTitle(fileName: string) {
   return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }
 
+function getTodayInputDate() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isPastInputDate(value?: string | null) {
+  return Boolean(value && value < getTodayInputDate());
+}
+
 export function DocumentHubScreen({
   onOpenDetail,
   mode = "repository",
@@ -322,6 +334,11 @@ export function DocumentHubScreen({
       return;
     }
 
+    if (isPastInputDate(bulkUploadForm.dueDate)) {
+      toast.error("Hạn xử lý không được là ngày trong quá khứ.");
+      return;
+    }
+
     setIsBulkUploading(true);
     try {
       const uploadedFiles = await cdnApi.uploadMultiple(
@@ -385,6 +402,11 @@ export function DocumentHubScreen({
     }
     if (selectedWorkflowSteps.some((step) => step.assignedToId === user?.id)) {
       toast.error("Bạn không thể tự phê duyệt tài liệu của mình.");
+      return;
+    }
+
+    if (isPastInputDate(createForm.dueDate)) {
+      toast.error("Hạn xử lý không được là ngày trong quá khứ.");
       return;
     }
 
@@ -848,6 +870,7 @@ export function DocumentHubScreen({
               </span>
               <input
                 type="date"
+                min={getTodayInputDate()}
                 value={bulkUploadForm.dueDate}
                 onChange={(event) =>
                   setBulkUploadForm((prev) => ({
@@ -948,6 +971,7 @@ export function DocumentHubScreen({
                   </span>
                   <input
                     type="date"
+                    min={getTodayInputDate()}
                     value={createForm.dueDate}
                     onChange={(event) =>
                       setCreateForm((prev) => ({ ...prev, dueDate: event.target.value }))

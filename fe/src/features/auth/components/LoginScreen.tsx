@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  CircleHelp,
   ArrowLeft,
   Eye,
   EyeOff,
@@ -14,6 +15,11 @@ import { toast } from "sonner";
 import { authApi, type TokenPurpose } from "@/api/authApi";
 import { BrandIcon } from "@/shared/components/BrandIcon";
 import { useAuth } from "@/context/AuthContext";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type AuthMode = "login" | "register" | "forgot" | "reset" | "confirm";
 
@@ -29,6 +35,9 @@ const inputClass =
 
 const passwordInputClass =
   "w-full mt-1 px-3 py-2.5 pr-10 text-sm bg-background border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed";
+
+const passwordRuleText =
+  "Mật khẩu tối thiểu 6 ký tự, nên có chữ hoa, chữ thường, số và ký tự đặc biệt.";
 
 function formatError(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -463,6 +472,24 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   <label className="text-sm font-medium text-foreground">
                     Mật khẩu
                   </label>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Quy tắc mật khẩu</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex transition-colors hover:text-foreground"
+                          aria-label="Quy tắc đặt mật khẩu"
+                          tabIndex={0}
+                        >
+                          <CircleHelp className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-64 text-sm">
+                        {passwordRuleText}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
