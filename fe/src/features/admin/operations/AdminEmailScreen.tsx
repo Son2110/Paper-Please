@@ -89,7 +89,7 @@ export function AdminEmailScreen() {
         <div className="border-b px-5 py-4">
           <h2 className="text-base font-semibold text-foreground">Gửi email</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gửi email thường, payment receipt hoặc subscription reminder theo template BE.
+            Gửi email thường, biên nhận thanh toán hoặc nhắc hạn gói theo mẫu hệ thống.
           </p>
         </div>
 

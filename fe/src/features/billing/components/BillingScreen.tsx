@@ -179,7 +179,7 @@ export function BillingScreen() {
     onSuccess: (response) => {
       const url = extractVnPayUrl(response);
       if (!url) {
-        toast.error("BE chưa trả payment URL");
+        toast.error("Chưa nhận được đường dẫn thanh toán");
         return;
       }
       window.location.assign(url);
@@ -274,7 +274,7 @@ export function BillingScreen() {
               <div className="mt-4 rounded-lg border bg-background p-4 text-sm text-muted-foreground">
                 {hasNoActiveSubscription
                   ? "Bạn chưa có gói active. Chọn một gói bên dưới để thanh toán qua VNPay."
-                  : "Chưa tải được thông tin billing. Có thể BE chưa có dữ liệu subscription cho user này."}
+                  : "Chưa tải được thông tin gói dịch vụ của tài khoản này."}
               </div>
             )}
           </div>

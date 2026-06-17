@@ -466,7 +466,7 @@ export function SettingsScreen() {
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
                     Thao tác này sẽ xóa tài khoản hiện tại. Bạn sẽ được đăng xuất
-                    ngay sau khi BE xử lý thành công.
+                    ngay sau khi hệ thống xử lý thành công.
                   </p>
                 </div>
               </div>

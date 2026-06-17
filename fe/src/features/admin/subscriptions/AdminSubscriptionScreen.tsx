@@ -680,7 +680,7 @@ export function AdminSubscriptionScreen() {
         <StatTile
           label="Người đăng ký mới"
           value={dashboard?.newSubscriber ?? 0}
-          sub="Theo thống kê BE"
+          sub="Theo thống kê hệ thống"
           tone="border-l-amber-500"
         />
         <StatTile

@@ -242,6 +242,11 @@ export function AdminShell() {
             <AdminDashboardScreen
               onOpenUsers={() => navigate("users")}
               onOpenSettings={() => navigate("overview")}
+              onOpenSubscriptions={() => navigate("subscriptions")}
+              onOpenBilling={() => navigate("billing")}
+              onOpenNotifications={() => navigate("notifications")}
+              onOpenCdnFiles={() => navigate("cdn-files")}
+              onOpenActivityLogs={() => navigate("activity-logs")}
             />
           )}
           {screen === "users" && <UserManagementPanel />}

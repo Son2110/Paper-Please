@@ -683,7 +683,7 @@ export function UserManagementPanel() {
                   )}
                   {subscriptionDetailQuery.isError && !subscriptionDetailQuery.isLoading && (
                     <p className="text-sm text-muted-foreground">
-                      Chưa có gói dịch vụ đang hoạt động hoặc BE chưa trả được dữ liệu.
+                      Chưa có gói dịch vụ đang hoạt động hoặc chưa tải được dữ liệu.
                     </p>
                   )}
                   {subscriptionDetailQuery.data && !subscriptionDetailQuery.isLoading && (
