@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Calendar,
@@ -32,6 +32,7 @@ import {
 } from "@/api/organizationApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
+import { PaginationFooter } from "@/shared/components/PaginationFooter";
 import { useAuth } from "@/context/AuthContext";
 import { useOrganization } from "@/context/OrganizationContext";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,9 @@ interface WorkflowAssigneeRow {
   stepType: WorkflowStepType;
   accessLevel: Exclude<DocumentAccessLevel, "Owner">;
 }
+
+const DOCUMENT_PAGE_SIZE = 10;
+const SUBMISSION_FETCH_PAGE_SIZE = 200;
 
 const emptyCreateForm: CreateFormState = {
   title: "",
@@ -176,6 +180,7 @@ export function DocumentHubScreen({
   const { activeOrganization } = useOrganization();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | "">("");
+  const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
@@ -204,11 +209,15 @@ export function DocumentHubScreen({
     } => ({
       searchQuery: searchQuery.trim(),
       status: isRepository ? ("Completed" as DocumentStatus) : statusFilter,
-      page: 1,
-      pageSize: 50,
+      page: isRepository ? page : 1,
+      pageSize: isRepository ? DOCUMENT_PAGE_SIZE : SUBMISSION_FETCH_PAGE_SIZE,
     }),
-    [isRepository, searchQuery, statusFilter],
+    [isRepository, page, searchQuery, statusFilter],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [isRepository, organizationId, searchQuery, statusFilter]);
 
   const documentsQuery = useQuery({
     queryKey: isRepository
@@ -284,6 +293,30 @@ export function DocumentHubScreen({
         .some((value) => value!.toLowerCase().includes(keyword)),
     );
   }, [documents, searchQuery]);
+
+  const totalItems = isRepository
+    ? documentsQuery.data?.totalItems ?? filteredDocuments.length
+    : filteredDocuments.length;
+  const totalPages = Math.max(
+    1,
+    isRepository
+      ? documentsQuery.data?.totalPages ?? Math.ceil(totalItems / DOCUMENT_PAGE_SIZE)
+      : Math.ceil(totalItems / DOCUMENT_PAGE_SIZE),
+  );
+  const paginatedDocuments = useMemo(
+    () =>
+      isRepository
+        ? filteredDocuments
+        : filteredDocuments.slice(
+            (page - 1) * DOCUMENT_PAGE_SIZE,
+            page * DOCUMENT_PAGE_SIZE,
+          ),
+    [filteredDocuments, isRepository, page],
+  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const stats = useMemo(
     () => ({
@@ -632,7 +665,7 @@ export function DocumentHubScreen({
               )}
 
               {!isLoading &&
-                filteredDocuments.map((document) => (
+                paginatedDocuments.map((document) => (
                   <tr
                     key={document.id}
                     className="border-b last:border-b-0 transition-colors hover:bg-muted/60"
@@ -727,6 +760,17 @@ export function DocumentHubScreen({
             </tbody>
           </table>
         </div>
+        {!isLoading && filteredDocuments.length > 0 && (
+          <PaginationFooter
+            page={page}
+            pageSize={DOCUMENT_PAGE_SIZE}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            itemLabel="tài liệu"
+            disabled={isLoading}
+            onPageChange={setPage}
+          />
+        )}
       </section>
 
       <AppModal

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -19,6 +19,7 @@ import {
 } from "@/api/documentApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
+import { PaginationFooter } from "@/shared/components/PaginationFooter";
 import { useOrganization } from "@/context/OrganizationContext";
 import type { Document } from "@/pages/Index";
 
@@ -26,6 +27,9 @@ interface ApprovalsProps {
   documents?: Document[];
   onOpenDetail: (docId: string) => void;
 }
+
+const TASK_PAGE_SIZE = 10;
+const TASK_FETCH_PAGE_SIZE = 200;
 
 const stepTypeLabels: Record<WorkflowStepType, string> = {
   Review: "Xem xét",
@@ -67,17 +71,18 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
   const [action, setAction] = useState<"Approved" | "Rejected" | null>(null);
   const [comment, setComment] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [page, setPage] = useState(1);
 
   const tasksQuery = useQuery({
     queryKey: queryKeys.documents.pendingTasks({
       organizationId,
       page: 1,
-      pageSize: 50,
+      pageSize: TASK_FETCH_PAGE_SIZE,
     }),
     queryFn: () =>
       documentApi.getMyPendingTasks({
         page: 1,
-        pageSize: 50,
+        pageSize: TASK_FETCH_PAGE_SIZE,
       }),
     enabled: Boolean(organizationId),
     staleTime: 15_000,
@@ -131,6 +136,23 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
       ),
     [scopedTasks],
   );
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / TASK_PAGE_SIZE));
+  const paginatedTasks = useMemo(
+    () =>
+      sortedTasks.slice(
+        (page - 1) * TASK_PAGE_SIZE,
+        page * TASK_PAGE_SIZE,
+      ),
+    [page, sortedTasks],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const openActionModal = (
     task: PendingWorkflowTaskDTO,
@@ -215,7 +237,7 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
           </div>
         ) : (
           <div className="divide-y">
-            {sortedTasks.map((task) => (
+            {paginatedTasks.map((task) => (
               <article
                 key={task.id}
                 className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]"
@@ -289,6 +311,15 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
                 </div>
               </article>
             ))}
+            <PaginationFooter
+              page={page}
+              pageSize={TASK_PAGE_SIZE}
+              totalItems={sortedTasks.length}
+              totalPages={totalPages}
+              itemLabel="công việc"
+              disabled={isLoading}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </section>
