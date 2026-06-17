@@ -1,8 +1,10 @@
 ﻿import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
+  CreditCard,
   Loader2,
   LogOut,
   Mail,
@@ -19,6 +21,7 @@ import {
   type CreateOrganizationRequest,
   type OrganizationDTO,
 } from "@/api/organizationApi";
+import { BillingScreen } from "@/features/billing/components/BillingScreen";
 import { OrganizationCreateForm } from "@/features/organizations/components/OrganizationCreateForm";
 import { BrandIcon } from "@/shared/components/BrandIcon";
 import { useAuth } from "@/context/AuthContext";
@@ -28,6 +31,8 @@ import { cn } from "@/lib/utils";
 interface WorkspaceSelectScreenProps {
   onContinue: () => void;
 }
+
+type WorkspaceView = "organizations" | "billing";
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -64,6 +69,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
   } = useOrganization();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(organizations.length === 0);
+  const [view, setView] = useState<WorkspaceView>("organizations");
 
   const filteredOrganizations = organizations.filter((organization) =>
     organization.name.toLowerCase().includes(search.trim().toLowerCase()),
@@ -102,7 +108,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
                 Paper Please
               </p>
               <h1 className="truncate text-lg font-bold text-foreground">
-                Chọn tổ chức
+                {view === "billing" ? "Gói dịch vụ" : "Chọn tổ chức"}
               </h1>
             </div>
           </div>
@@ -118,6 +124,33 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
+        {view === "billing" ? (
+          <div className="space-y-5">
+            <section className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Thanh toán trước khi tạo tổ chức
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">
+                  Chọn gói phù hợp để mở khóa tổ chức
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                  Sau khi thanh toán thành công, quay lại màn tổ chức để tạo hoặc vào tổ chức của bạn.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setView("organizations")}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-semibold hover:bg-muted"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Quay lại tổ chức
+              </button>
+            </section>
+            <BillingScreen />
+          </div>
+        ) : (
+          <>
         <section className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold text-muted-foreground">
@@ -128,6 +161,14 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
             </h2>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setView("billing")}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            >
+              <CreditCard className="h-4 w-4" />
+              Gói dịch vụ
+            </button>
             <button
               type="button"
               onClick={() => refreshOrganizations()}
@@ -176,8 +217,31 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
               )}
 
               {!isLoading && organizations.length === 0 && (
-                <div className="rounded-lg border border-dashed bg-card p-6 text-sm text-muted-foreground md:col-span-2">
-                  Bạn chưa thuộc tổ chức nào. Hãy tạo tổ chức đầu tiên để bắt đầu quản lý tài liệu và mời thành viên.
+                <div className="rounded-lg border border-dashed bg-card p-6 md:col-span-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    Bạn chưa thuộc tổ chức nào
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Nếu chưa có gói dịch vụ, hãy chọn gói trước rồi quay lại tạo tổ chức đầu tiên.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setView("billing")}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Chọn gói dịch vụ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreate(true)}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-semibold hover:bg-muted"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Tạo tổ chức
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -298,6 +362,8 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
             </aside>
           )}
         </div>
+          </>
+        )}
       </main>
     </div>
   );
