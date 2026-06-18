@@ -1,5 +1,7 @@
 ﻿import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -59,6 +61,7 @@ function statusClass(status: OrganizationDTO["status"]) {
 
 export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps) {
   const { logout, user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     organizations,
     activeOrganizationId,
@@ -69,7 +72,26 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
   } = useOrganization();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(organizations.length === 0);
-  const [view, setView] = useState<WorkspaceView>("organizations");
+  const [view, setViewState] = useState<WorkspaceView>(
+    searchParams.get("workspace") === "billing" ? "billing" : "organizations",
+  );
+
+  const switchView = (nextView: WorkspaceView) => {
+    setViewState(nextView);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextView === "billing") {
+      nextParams.set("workspace", "billing");
+    } else {
+      nextParams.delete("workspace");
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  useEffect(() => {
+    if (searchParams.get("workspace") === "billing") {
+      setViewState("billing");
+    }
+  }, [searchParams]);
 
   const filteredOrganizations = organizations.filter((organization) =>
     organization.name.toLowerCase().includes(search.trim().toLowerCase()),
@@ -140,7 +162,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
               </div>
               <button
                 type="button"
-                onClick={() => setView("organizations")}
+                onClick={() => switchView("organizations")}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-semibold hover:bg-muted"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -163,7 +185,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setView("billing")}
+              onClick={() => switchView("billing")}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-semibold hover:bg-muted"
             >
               <CreditCard className="h-4 w-4" />
@@ -227,7 +249,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setView("billing")}
+                      onClick={() => switchView("billing")}
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                     >
                       <CreditCard className="h-4 w-4" />

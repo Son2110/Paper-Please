@@ -7,6 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { OrganizationProvider } from "@/context/OrganizationContext";
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
+import { PaymentResultScreen } from "@/features/billing/components/PaymentResultScreen";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
+              <Route path="/payment/result" element={<PaymentResultScreen />} />
               <Route path="/" element={<Index />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
