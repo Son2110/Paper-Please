@@ -24,6 +24,7 @@ import { adminUserApi } from "@/api/adminUserApi";
 import { queryKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { AppModal } from "@/shared/components/AppModal";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 interface SubscriptionFormState {
   id?: string;
@@ -891,6 +892,11 @@ export function AdminSubscriptionScreen() {
             Trang detail {analyticsPage}/{analyticsTotalPages}
           </p>
           <div className="flex items-center gap-2">
+            <PageJumpInput
+              page={analyticsPage}
+              totalPages={analyticsTotalPages}
+              onPageChange={setAnalyticsPage}
+            />
             <button
               type="button"
               onClick={() => setAnalyticsPage((value) => Math.max(1, value - 1))}
@@ -1350,6 +1356,11 @@ export function AdminSubscriptionScreen() {
             <span className="text-sm text-muted-foreground">
               Trang {subscriberPage}/{totalSubscriberPages}
             </span>
+            <PageJumpInput
+              page={subscriberPage}
+              totalPages={totalSubscriberPages}
+              onPageChange={setSubscriberPage}
+            />
             <button
               type="button"
               onClick={() =>

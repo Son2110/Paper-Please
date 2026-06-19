@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 interface PaginationFooterProps {
   page: number;
@@ -39,7 +40,7 @@ export function PaginationFooter({
         trong <span className="font-semibold text-foreground">{totalItems}</span>{" "}
         {itemLabel}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => goToPage(safePage - 1)}
@@ -55,6 +56,12 @@ export function PaginationFooter({
         <span className="min-w-24 text-center font-medium text-foreground">
           Trang {safePage}/{safeTotalPages}
         </span>
+        <PageJumpInput
+          page={safePage}
+          totalPages={safeTotalPages}
+          disabled={disabled}
+          onPageChange={goToPage}
+        />
         <button
           type="button"
           onClick={() => goToPage(safePage + 1)}

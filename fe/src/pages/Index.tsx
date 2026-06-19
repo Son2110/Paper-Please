@@ -56,12 +56,21 @@ export interface Document {
 
 const initialDocuments: Document[] = [];
 
+function shouldOpenWorkspaceBilling() {
+  return new URLSearchParams(window.location.search).get("workspace") === "billing";
+}
+
 const Index = () => {
   const { isAuthenticated, isInitializing, logout, user } = useAuth();
-  const { activeOrganization, isLoading: isLoadingOrganizations } =
-    useOrganization();
+  const {
+    activeOrganization,
+    activeOrganizationId,
+    isLoading: isLoadingOrganizations,
+  } = useOrganization();
   const [screen, setScreen] = useState<Screen>("dashboard");
-  const [workspaceConfirmed, setWorkspaceConfirmed] = useState(false);
+  const [workspaceConfirmed, setWorkspaceConfirmed] = useState(
+    () => Boolean(activeOrganizationId) && !shouldOpenWorkspaceBilling(),
+  );
   const [selectedDocId, setSelectedDocId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -76,9 +85,17 @@ const Index = () => {
   const [documents, setDocuments] = useState<Document[]>(initialDocuments);
 
   useEffect(() => {
-    setWorkspaceConfirmed(false);
+    setWorkspaceConfirmed(
+      Boolean(activeOrganizationId) && !shouldOpenWorkspaceBilling(),
+    );
     setScreen("dashboard");
   }, [user?.id]);
+
+  useEffect(() => {
+    if (activeOrganization && !shouldOpenWorkspaceBilling()) {
+      setWorkspaceConfirmed(true);
+    }
+  }, [activeOrganization]);
 
   if (isInitializing) {
     return (
@@ -95,6 +112,15 @@ const Index = () => {
 
   if (user?.userType === "Admin") {
     return <AdminShell />;
+  }
+
+  if (workspaceConfirmed && isLoadingOrganizations && !activeOrganization) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        Đang tải tổ chức...
+      </div>
+    );
   }
 
   if (!workspaceConfirmed || (!activeOrganization && !isLoadingOrganizations)) {

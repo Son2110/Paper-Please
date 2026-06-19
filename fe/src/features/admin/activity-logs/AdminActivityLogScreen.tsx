@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { activityLogApi, type ActivityLogDTO } from "@/api/activityLogApi";
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 const pageSize = 12;
 
@@ -380,6 +381,7 @@ export function AdminActivityLogScreen() {
             <span className="text-sm text-muted-foreground">
               Trang {page}/{totalPages}
             </span>
+            <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
             <button
               type="button"
               onClick={() => setPage((value) => Math.min(totalPages, value + 1))}

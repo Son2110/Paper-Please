@@ -20,6 +20,8 @@ export const queryKeys = {
   documents: {
     all: ["documents"] as const,
     detail: (documentId: string) => ["documents", "detail", documentId] as const,
+    workflow: (documentId: string) =>
+      ["documents", "workflow", documentId] as const,
     list: (
       organizationId?: string | null,
       filters?: { searchQuery?: string; status?: DocumentStatus | ""; page?: number; pageSize?: number },

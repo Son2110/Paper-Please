@@ -31,12 +31,14 @@ const OrganizationContext = createContext<OrganizationContextValue | undefined>(
 );
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
   const [organizations, setOrganizations] = useState<OrganizationDTO[]>([]);
   const [activeOrganizationId, setActiveOrganizationIdState] = useState<
     string | null
   >(() => window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY));
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(
+    () => Boolean(window.localStorage.getItem(ACTIVE_ORGANIZATION_STORAGE_KEY)),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const setActiveOrganizationId = useCallback((id: string | null) => {
@@ -52,6 +54,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setOrganizations([]);
       setActiveOrganizationId(null);
+      setIsLoading(false);
       return [];
     }
 
@@ -81,8 +84,9 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   }, [activeOrganizationId, isAuthenticated, setActiveOrganizationId]);
 
   useEffect(() => {
+    if (isInitializing) return;
     refreshOrganizations();
-  }, [refreshOrganizations]);
+  }, [isInitializing, refreshOrganizations]);
 
   const activeOrganization = useMemo(
     () =>

@@ -42,6 +42,10 @@ import { useOrganization } from "@/context/OrganizationContext";
 import { cn } from "@/lib/utils";
 import type { Document } from "@/pages/Index";
 import { AppModal } from "@/shared/components/AppModal";
+import {
+  isUploadFileSizeAllowed,
+  UPLOAD_FILE_SIZE_NOTE,
+} from "@/shared/lib/fileUpload";
 
 interface DocumentDetailProps {
   docId: string;
@@ -273,6 +277,13 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     createWorkflowRow(),
   ]);
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
+  const [showResubmitModal, setShowResubmitModal] = useState(false);
+  const [resubmitFile, setResubmitFile] = useState<File | null>(null);
+  const [resubmitSummary, setResubmitSummary] = useState("");
+  const [resubmitWorkflowRows, setResubmitWorkflowRows] = useState<WorkflowRow[]>([
+    createWorkflowRow(),
+  ]);
+  const [isResubmitting, setIsResubmitting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -353,6 +364,11 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const currentWorkflowSteps = Array.isArray(currentWorkflow?.steps)
     ? currentWorkflow.steps
     : [];
+  const rejectedStep = [...currentWorkflowSteps]
+    .sort((left, right) => right.stepOrder - left.stepOrder)
+    .find((step) => step.status === "Rejected");
+  const rejectionReason =
+    rejectedStep?.comment?.trim() || "Người xử lý chưa cung cấp lý do từ chối.";
   const pendingStep = currentWorkflowSteps.find(
     (step) => step.status === "Pending",
   );
@@ -387,6 +403,9 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     canManageDocumentAccess ||
     currentParticipant?.accessLevel === "Owner" ||
     currentParticipant?.accessLevel === "Editor";
+  const canResubmitDocument =
+    isRejectedDocument &&
+    (isDocumentCreator || currentParticipant?.accessLevel === "Owner");
 
   const refreshDetail = () =>
     queryClient.invalidateQueries({
@@ -411,6 +430,10 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
       toast.error("Vui lòng chọn file phiên bản mới.");
       return;
     }
+    if (!isUploadFileSizeAllowed(versionFile)) {
+      toast.error(UPLOAD_FILE_SIZE_NOTE);
+      return;
+    }
 
     setIsUploadingVersion(true);
     try {
@@ -433,6 +456,107 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
       );
     } finally {
       setIsUploadingVersion(false);
+    }
+  };
+
+  const openResubmitModal = () => {
+    const previousSteps = [...currentWorkflowSteps]
+      .sort((left, right) => left.stepOrder - right.stepOrder)
+      .map((step) => ({
+        id: crypto.randomUUID(),
+        userId: step.assignedToId,
+        stepType: step.stepType,
+      }));
+
+    setResubmitFile(null);
+    setResubmitSummary("");
+    setResubmitWorkflowRows(
+      previousSteps.length > 0 ? previousSteps : [createWorkflowRow()],
+    );
+    setShowResubmitModal(true);
+  };
+
+  const closeResubmitModal = () => {
+    if (isResubmitting) return;
+    setShowResubmitModal(false);
+    setResubmitFile(null);
+    setResubmitSummary("");
+  };
+
+  const handleResubmitDocument = async () => {
+    if (!canResubmitDocument) {
+      toast.error("Chỉ người tạo tài liệu mới có thể nộp lại.");
+      return;
+    }
+    if (!resubmitFile) {
+      toast.error("Vui lòng chọn file đã chỉnh sửa.");
+      return;
+    }
+    if (!isUploadFileSizeAllowed(resubmitFile)) {
+      toast.error(UPLOAD_FILE_SIZE_NOTE);
+      return;
+    }
+    if (!resubmitSummary.trim()) {
+      toast.error("Vui lòng mô tả nội dung đã thay đổi.");
+      return;
+    }
+
+    const steps = resubmitWorkflowRows
+      .filter((row) => row.userId)
+      .map((row) => ({
+        assignedToId: row.userId,
+        stepType: row.stepType,
+      }));
+
+    if (steps.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một người xử lý.");
+      return;
+    }
+    if (steps.some((step) => step.assignedToId === user?.id)) {
+      toast.error("Bạn không thể tự phê duyệt tài liệu của mình.");
+      return;
+    }
+
+    setIsResubmitting(true);
+    try {
+      const uploaded = await cdnApi.uploadFile(
+        resubmitFile,
+        resubmitSummary.trim(),
+      );
+      await documentApi.uploadVersion(docId, {
+        fileName: uploaded.originalName || resubmitFile.name,
+        fileUrl: uploaded.apiUrl || uploaded.APIUrl || uploaded.url,
+        mimeType:
+          uploaded.mimeType || resubmitFile.type || "application/octet-stream",
+        fileSize: uploaded.sizeBytes || resubmitFile.size,
+        changeSummary: resubmitSummary.trim(),
+      });
+
+      const participantIds = new Set(participants.map((item) => item.userId));
+      for (const step of steps) {
+        if (!participantIds.has(step.assignedToId)) {
+          await documentApi.addParticipant(docId, {
+            userId: step.assignedToId,
+            accessLevel: "Viewer",
+          });
+          participantIds.add(step.assignedToId);
+        }
+      }
+
+      await documentApi.createWorkflow(docId, { steps });
+      toast.success("Đã nộp lại tài liệu để phê duyệt.");
+      setShowResubmitModal(false);
+      setResubmitFile(null);
+      setResubmitSummary("");
+      setActiveTab("overview");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      await refreshDetail();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Không thể nộp lại tài liệu.",
+      );
+    } finally {
+      setIsResubmitting(false);
     }
   };
 
@@ -753,6 +877,208 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   return (
     <>
       {isEditModalOpen && <EditDocumentModal />}
+      <AppModal
+        open={showResubmitModal}
+        onOpenChange={(open) => {
+          if (!open) closeResubmitModal();
+        }}
+        title="Nộp lại tài liệu"
+        description="Tải phiên bản đã chỉnh sửa và xác nhận lại quy trình phê duyệt."
+        className="max-w-3xl"
+        contentClassName="space-y-5"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={closeResubmitModal}
+              disabled={isResubmitting}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleResubmitDocument}
+              disabled={
+                isResubmitting ||
+                !resubmitFile ||
+                !resubmitSummary.trim() ||
+                !resubmitWorkflowRows.some((row) => row.userId)
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isResubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UploadCloud className="h-4 w-4" />
+              )}
+              Nộp lại để phê duyệt
+            </button>
+          </>
+        }
+      >
+        <section className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-800">Lý do từ chối</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-red-700">
+            {rejectionReason}
+          </p>
+          {rejectedStep && (
+            <p className="mt-2 text-xs text-red-600">
+              {rejectedStep.assignedToName ||
+                rejectedStep.assignedToEmail ||
+                "Người xử lý"}
+              {rejectedStep.completedAt
+                ? ` · ${formatDate(rejectedStep.completedAt)}`
+                : ""}
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Phiên bản đã chỉnh sửa
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Phiên bản cũ vẫn được giữ trong lịch sử tài liệu.
+            </p>
+          </div>
+          <label className="block space-y-1.5 text-sm font-medium text-foreground">
+            <span>File mới</span>
+            <input
+              type="file"
+              required
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                if (file && !isUploadFileSizeAllowed(file)) {
+                  toast.error(`${file.name} vượt giới hạn 20 MB.`);
+                  setResubmitFile(null);
+                } else {
+                  setResubmitFile(file);
+                }
+                event.target.value = "";
+              }}
+              className="block h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm"
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {UPLOAD_FILE_SIZE_NOTE}
+            </span>
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium text-foreground">
+            <span>Nội dung đã thay đổi</span>
+            <textarea
+              value={resubmitSummary}
+              onChange={(event) => setResubmitSummary(event.target.value)}
+              rows={3}
+              placeholder="Mô tả những nội dung đã sửa theo phản hồi..."
+              className="w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+        </section>
+
+        <section className="space-y-4 border-t pt-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Quy trình phê duyệt
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Quy trình cũ được sao chép để bạn kiểm tra và điều chỉnh.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setResubmitWorkflowRows((prev) => [
+                  ...prev,
+                  createWorkflowRow(),
+                ])
+              }
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+            >
+              <UserPlus className="h-4 w-4" />
+              Thêm bước
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {resubmitWorkflowRows.map((row, index) => (
+              <div
+                key={row.id}
+                className="grid gap-3 rounded-lg border bg-muted/30 p-3 md:grid-cols-[72px_minmax(0,1fr)_180px_auto] md:items-center"
+              >
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Bước {index + 1}
+                </p>
+                <select
+                  value={row.userId}
+                  onChange={(event) =>
+                    setResubmitWorkflowRows((prev) =>
+                      prev.map((item) =>
+                        item.id === row.id
+                          ? { ...item, userId: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Chọn người xử lý</option>
+                  {organizationMembers.map((member) => {
+                    const memberUserId = getMemberUserId(member);
+                    if (!memberUserId || memberUserId === user?.id) return null;
+                    return (
+                      <option
+                        key={member.memberId || member.id || memberUserId}
+                        value={memberUserId}
+                      >
+                        {getMemberLabel(member)}
+                      </option>
+                    );
+                  })}
+                </select>
+                <select
+                  value={row.stepType}
+                  onChange={(event) =>
+                    setResubmitWorkflowRows((prev) =>
+                      prev.map((item) =>
+                        item.id === row.id
+                          ? {
+                              ...item,
+                              stepType: event.target.value as WorkflowStepType,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="h-10 rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  {(Object.keys(workflowTypeLabels) as WorkflowStepType[]).map(
+                    (stepType) => (
+                      <option key={stepType} value={stepType}>
+                        {workflowTypeLabels[stepType]}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setResubmitWorkflowRows((prev) =>
+                      prev.length === 1
+                        ? [createWorkflowRow()]
+                        : prev.filter((item) => item.id !== row.id),
+                    )
+                  }
+                  className="inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-destructive"
+                >
+                  Xóa
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      </AppModal>
       <div className="animate-fade-in space-y-5">
         <header className="rounded-lg border bg-card">
           <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
@@ -802,12 +1128,16 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                 type="button"
                 onClick={() => {
                   if (isRejectedDocument) {
-                    setActiveTab("workflow");
+                    openResubmitModal();
                   } else {
                     handleOpenFile(currentVersion);
                   }
                 }}
-                disabled={!isRejectedDocument && !currentVersion?.fileUrl}
+                disabled={
+                  isRejectedDocument
+                    ? !canResubmitDocument
+                    : !currentVersion?.fileUrl
+                }
                 className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isRejectedDocument ? (
@@ -922,7 +1252,8 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                       </p>
                       <button
                         type="button"
-                        onClick={() => setActiveTab("workflow")}
+                        onClick={openResubmitModal}
+                        disabled={!canResubmitDocument}
                         className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                       >
                         <UploadCloud className="h-4 w-4" />
@@ -956,7 +1287,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
               <div className="space-y-5 p-5">
                 <DocumentPreview version={previewVersion} />
 
-                {canEditFiles && (
+                {canEditFiles && !isRejectedDocument && (
                 <details className="rounded-lg border bg-background p-4">
                   <summary className="cursor-pointer text-sm font-semibold text-foreground">
                     Upload phiên bản mới
@@ -964,9 +1295,16 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                   <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
                     <input
                       type="file"
-                      onChange={(event) =>
-                        setVersionFile(event.target.files?.[0] ?? null)
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        if (file && !isUploadFileSizeAllowed(file)) {
+                          toast.error(`${file.name} vượt giới hạn 20 MB.`);
+                          setVersionFile(null);
+                        } else {
+                          setVersionFile(file);
+                        }
+                        event.target.value = "";
+                      }}
                       className="h-10 rounded-lg border bg-background px-3 py-2 text-sm"
                     />
                     <input
@@ -991,6 +1329,9 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                       Upload
                     </button>
                   </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {UPLOAD_FILE_SIZE_NOTE}
+                  </p>
                 </details>
                 )}
 
@@ -1032,6 +1373,28 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
 
             {activeTab === "workflow" && (
               <div className="space-y-5 p-5">
+                {isRejectedDocument && (
+                  <div className="flex flex-col gap-4 rounded-lg border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">
+                        Quy trình trước đã bị từ chối
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-sm text-red-700">
+                        {rejectionReason}
+                      </p>
+                    </div>
+                    {canResubmitDocument && (
+                      <button
+                        type="button"
+                        onClick={openResubmitModal}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                      >
+                        <UploadCloud className="h-4 w-4" />
+                        Nộp lại tài liệu
+                      </button>
+                    )}
+                  </div>
+                )}
                 {currentWorkflow && !canCreateWorkflow && (
                   <div className="space-y-4">
                     <div className="flex flex-col gap-3 rounded-lg border bg-background p-4 md:flex-row md:items-center md:justify-between">
@@ -1059,7 +1422,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                   </div>
                 )}
 
-                {canCreateWorkflow && (
+                {canCreateWorkflow && !isRejectedDocument && (
                   <div className="rounded-lg border bg-background p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>

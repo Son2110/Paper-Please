@@ -10,6 +10,7 @@ import {
 import { billingApi, type BillingRecordDTO } from "@/api/billingApi";
 import { queryKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 function formatMoney(value?: number | null) {
   return new Intl.NumberFormat("vi-VN", {
@@ -291,6 +292,7 @@ export function AdminBillingScreen() {
               <CalendarClock className="h-4 w-4" />
               Trang {page}/{totalPages}
             </span>
+            <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
             <button
               type="button"
               onClick={() => setPage((value) => Math.min(totalPages, value + 1))}

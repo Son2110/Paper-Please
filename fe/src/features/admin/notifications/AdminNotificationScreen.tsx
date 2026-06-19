@@ -19,6 +19,7 @@ import {
 } from "@/api/notificationApi";
 import { queryKeys } from "@/api/queryKeys";
 import type { UserDTO } from "@/api/userApi";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 import {
   translateNotificationText,
   translateNotificationType,
@@ -531,6 +532,7 @@ export function AdminNotificationScreen() {
                 <CheckCircle className="h-4 w-4" />
                 Trang {page}/{totalPages}
               </span>
+              <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
               <button
                 type="button"
                 onClick={() => setPage((value) => Math.min(totalPages, value + 1))}

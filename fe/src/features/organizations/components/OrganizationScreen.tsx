@@ -25,6 +25,7 @@ import { queryKeys } from "@/api/queryKeys";
 import { useAuth } from "@/context/AuthContext";
 import { useOrganization } from "@/context/OrganizationContext";
 import { AppModal } from "@/shared/components/AppModal";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 type MemberDraft = {
   role: OrganizationRole;
@@ -105,6 +106,7 @@ export function OrganizationScreen() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<OrganizationRole>("Member");
   const [inviteJobTitleId, setInviteJobTitleId] = useState("");
+  const [showInviteMember, setShowInviteMember] = useState(false);
   const [jobTitleName, setJobTitleName] = useState("");
   const [jobTitleDescription, setJobTitleDescription] = useState("");
   const [memberDrafts, setMemberDrafts] = useState<Record<string, MemberDraft>>(
@@ -280,6 +282,7 @@ export function OrganizationScreen() {
       }),
     onSuccess: () => {
       toast.success("Đã thêm thành viên");
+      setShowInviteMember(false);
       setInviteEmail("");
       setInviteRole("Member");
       setInviteJobTitleId("");
@@ -652,57 +655,18 @@ export function OrganizationScreen() {
                   <Search className="h-4 w-4" />
                   Tìm
                 </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowInviteMember(true)}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Thêm thành viên
+                  </button>
+                )}
               </div>
             </div>
-
-            <form
-              onSubmit={handleInvite}
-              className="grid gap-3 border-b p-4 lg:grid-cols-[minmax(220px,1fr)_180px_220px_140px]"
-            >
-              <input
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="Email người dùng"
-                className="h-10 rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <select
-                value={inviteRole}
-                onChange={(event) =>
-                  setInviteRole(event.target.value as OrganizationRole)
-                }
-                className="h-10 rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {ORGANIZATION_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {roleLabel(role)}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={inviteJobTitleId}
-                onChange={(event) => setInviteJobTitleId(event.target.value)}
-                className="h-10 rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="">Không chọn chức danh</option>
-                {jobTitles.map((title) => (
-                  <option key={title.id} value={title.id}>
-                    {title.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                disabled={inviteMutation.isPending || !canManage}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {inviteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UserPlus className="h-4 w-4" />
-                )}
-                Thêm
-              </button>
-            </form>
 
             {memberIdMissing && (
               <div className="border-b bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -876,6 +840,11 @@ export function OrganizationScreen() {
                 <span className="text-sm text-muted-foreground">
                   Trang {memberPage}/{totalMemberPages}
                 </span>
+                <PageJumpInput
+                  page={memberPage}
+                  totalPages={totalMemberPages}
+                  onPageChange={setMemberPage}
+                />
                 <button
                   type="button"
                   onClick={() =>
@@ -1033,6 +1002,93 @@ export function OrganizationScreen() {
             </div>
           </section>
         </>
+      )}
+
+      {activeOrganization && (
+        <AppModal
+          open={showInviteMember}
+          onOpenChange={(open) => {
+            if (!open && !inviteMutation.isPending) {
+              setShowInviteMember(false);
+            }
+          }}
+          title="Thêm thành viên"
+          description={`Mời người dùng đã đăng ký vào ${activeOrganization.name}.`}
+          className="max-w-lg"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setShowInviteMember(false)}
+                disabled={inviteMutation.isPending}
+                className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                form="invite-member-form"
+                disabled={inviteMutation.isPending || !inviteEmail.trim()}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {inviteMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4" />
+                )}
+                Thêm thành viên
+              </button>
+            </>
+          }
+        >
+          <form id="invite-member-form" onSubmit={handleInvite} className="space-y-4">
+            <label className="block space-y-1.5 text-sm font-medium text-foreground">
+              <span>Email người dùng</span>
+              <input
+                type="email"
+                required
+                autoFocus
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="name@example.com"
+                className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-1.5 text-sm font-medium text-foreground">
+                <span>Quyền trong tổ chức</span>
+                <select
+                  value={inviteRole}
+                  onChange={(event) =>
+                    setInviteRole(event.target.value as OrganizationRole)
+                  }
+                  className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  {ORGANIZATION_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {roleLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1.5 text-sm font-medium text-foreground">
+                <span>Chức danh</span>
+                <select
+                  value={inviteJobTitleId}
+                  onChange={(event) => setInviteJobTitleId(event.target.value)}
+                  className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">Không chọn chức danh</option>
+                  {jobTitles.map((title) => (
+                    <option key={title.id} value={title.id}>
+                      {title.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </form>
+        </AppModal>
       )}
 
       {activeOrganization && (

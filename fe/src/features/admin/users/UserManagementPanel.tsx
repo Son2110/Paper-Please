@@ -24,6 +24,7 @@ import type { SubscriptionDetailResponse } from "@/api/subscriptionApi";
 import type { UserDTO } from "@/api/userApi";
 import { useAuth } from "@/context/AuthContext";
 import { AppModal } from "@/shared/components/AppModal";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 const roles = ["User", "Moderator", "Admin"] as const;
 const statuses = ["Active", "Inactive", "Disabled", "Suspended", "Banned"] as const;
@@ -529,6 +530,7 @@ export function UserManagementPanel() {
           <span className="text-sm text-muted-foreground">
             Trang {page}/{totalPages}
           </span>
+          <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
           <button
             type="button"
             onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
@@ -819,6 +821,11 @@ export function UserManagementPanel() {
                         <span className="text-sm text-muted-foreground">
                           Trang {billingPage}/{Math.max(1, billingHistoryQuery.data.billingHistory.totalPages)}
                         </span>
+                        <PageJumpInput
+                          page={billingPage}
+                          totalPages={Math.max(1, billingHistoryQuery.data.billingHistory.totalPages)}
+                          onPageChange={setBillingPage}
+                        />
                         <button
                           type="button"
                           onClick={() =>

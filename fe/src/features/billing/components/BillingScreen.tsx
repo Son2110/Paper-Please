@@ -18,6 +18,7 @@ import {
 import { subscriptionApi, type SubscriptionDTO } from "@/api/subscriptionApi";
 import { queryKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
 
 function formatMoney(value?: number | null) {
   return new Intl.NumberFormat("vi-VN", {
@@ -440,6 +441,7 @@ export function BillingScreen() {
             <span className="text-sm text-muted-foreground">
               Trang {page}/{totalPages}
             </span>
+            <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
             <button
               type="button"
               onClick={() =>

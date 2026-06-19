@@ -13,6 +13,12 @@ import {
 import { toast } from "sonner";
 import { cdnApi, type UploadedFileResponse } from "@/api/cdnApi";
 import { AppModal } from "@/shared/components/AppModal";
+import { PageJumpInput } from "@/shared/components/PageJumpInput";
+import {
+  getOversizedUploadFiles,
+  isUploadFileSizeAllowed,
+  UPLOAD_FILE_SIZE_NOTE,
+} from "@/shared/lib/fileUpload";
 
 const FILES_PER_PAGE = 10;
 
@@ -112,10 +118,14 @@ export function AdminCdnFileScreen() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-cdn-files"] });
 
   const uploadMutation = useMutation<UploadedFileResponse | UploadedFileResponse[]>({
-    mutationFn: () =>
-      files.length > 1
+    mutationFn: () => {
+      if (getOversizedUploadFiles(files).length > 0) {
+        throw new Error(UPLOAD_FILE_SIZE_NOTE);
+      }
+      return files.length > 1
         ? cdnApi.uploadMultiple(files, description || undefined)
-        : cdnApi.uploadFile(files[0], description || undefined),
+        : cdnApi.uploadFile(files[0], description || undefined);
+    },
     onSuccess: () => {
       toast.success("Đã upload file");
       setFiles([]);
@@ -148,6 +158,16 @@ export function AdminCdnFileScreen() {
 
   const handleDelete = (file: UploadedFileResponse) => {
     setDeleteTarget(file);
+  };
+
+  const handleFilesSelected = (nextFiles: File[]) => {
+    const oversizedFiles = getOversizedUploadFiles(nextFiles);
+    if (oversizedFiles.length > 0) {
+      toast.error(
+        `${oversizedFiles.map((file) => file.name).join(", ")} vượt giới hạn 20 MB.`,
+      );
+    }
+    setFiles(nextFiles.filter(isUploadFileSizeAllowed));
   };
 
   const confirmDelete = () => {
@@ -190,9 +210,15 @@ export function AdminCdnFileScreen() {
             <input
               type="file"
               multiple
-              onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+              onChange={(event) => {
+                handleFilesSelected(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
               className="block w-full rounded-lg border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-primary-foreground"
             />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {UPLOAD_FILE_SIZE_NOTE}
+            </span>
           </label>
           <label className="space-y-1 text-sm font-medium">
             <span>Description</span>
@@ -325,6 +351,7 @@ export function AdminCdnFileScreen() {
             <span className="text-sm text-muted-foreground">
               Trang {page}/{totalPages}
             </span>
+            <PageJumpInput page={page} totalPages={totalPages} onPageChange={setPage} />
             <button
               type="button"
               onClick={() => setPage((value) => Math.min(totalPages, value + 1))}

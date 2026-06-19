@@ -40,17 +40,19 @@ export const cdnApi = {
   },
 
   uploadMultiple(files: File[], description?: string) {
-    const formData = new FormData();
-    files.forEach((file, index) => {
-      formData.append(`forms[${index}].File`, file);
-      if (description) formData.append(`forms[${index}].Description`, description);
-    });
+    return Promise.all(
+      files.map((file) => {
+        const formData = new FormData();
+        formData.append("File", file);
+        if (description) formData.append("Description", description);
 
-    return apiRequest<UploadedFileResponse[]>("/Files/upload-multiple", {
-      baseUrl: CDN_BASE_URL,
-      method: "POST",
-      body: formData,
-    });
+        return apiRequest<UploadedFileResponse>("/Files/upload", {
+          baseUrl: CDN_BASE_URL,
+          method: "POST",
+          body: formData,
+        });
+      }),
+    );
   },
 
   deleteFile(savedName: string) {

@@ -1,4 +1,9 @@
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -33,6 +38,11 @@ import {
 import { queryKeys } from "@/api/queryKeys";
 import { AppModal } from "@/shared/components/AppModal";
 import { PaginationFooter } from "@/shared/components/PaginationFooter";
+import {
+  getOversizedUploadFiles,
+  isUploadFileSizeAllowed,
+  UPLOAD_FILE_SIZE_NOTE,
+} from "@/shared/lib/fileUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useOrganization } from "@/context/OrganizationContext";
 import { cn } from "@/lib/utils";
@@ -44,12 +54,6 @@ interface DocumentHubProps {
 
 interface CreateFormState {
   title: string;
-  description: string;
-  dueDate: string;
-  changeSummary: string;
-}
-
-interface BulkUploadFormState {
   description: string;
   dueDate: string;
   changeSummary: string;
@@ -100,12 +104,6 @@ async function getCompletedOrganizationDocuments(organizationId: string) {
 
 const emptyCreateForm: CreateFormState = {
   title: "",
-  description: "",
-  dueDate: "",
-  changeSummary: "",
-};
-
-const emptyBulkUploadForm: BulkUploadFormState = {
   description: "",
   dueDate: "",
   changeSummary: "",
@@ -217,8 +215,6 @@ export function DocumentHubScreen({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
-  const [bulkUploadForm, setBulkUploadForm] =
-    useState<BulkUploadFormState>(emptyBulkUploadForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [workflowRows, setWorkflowRows] = useState<WorkflowAssigneeRow[]>([
@@ -289,8 +285,12 @@ export function DocumentHubScreen({
   const documents = useMemo(() => {
     const items = documentsQuery.data?.items ?? [];
     if (isRepository) return items;
-    return items.filter((document) => document.organizationId === organizationId);
-  }, [documentsQuery.data?.items, isRepository, organizationId]);
+    return items.filter(
+      (document) =>
+        document.organizationId === organizationId &&
+        document.ownerId === user?.id,
+    );
+  }, [documentsQuery.data?.items, isRepository, organizationId, user?.id]);
   const organizationMembers = useMemo(
     () => membersQuery.data?.items ?? [],
     [membersQuery.data?.items],
@@ -337,6 +337,44 @@ export function DocumentHubScreen({
       ),
     [filteredDocuments, page],
   );
+  const workflowQueries = useQueries({
+    queries: paginatedDocuments.map((document) => ({
+      queryKey: queryKeys.documents.workflow(document.id),
+      queryFn: () => documentApi.getWorkflow(document.id),
+      enabled:
+        isSubmissions &&
+        ["InProgress", "WaitingSignature"].includes(document.status),
+      staleTime: 30_000,
+      retry: false,
+    })),
+  });
+  const currentApproverByDocument = new Map(
+    paginatedDocuments.map((document, index) => {
+      const workflowQuery = workflowQueries[index];
+      const currentStep = workflowQuery.data?.steps
+        .filter((step) => step.status === "Pending")
+        .sort((left, right) => left.stepOrder - right.stepOrder)[0];
+      const assignedMember = currentStep
+        ? organizationMembers.find(
+            (member) => getMemberUserId(member) === currentStep.assignedToId,
+          )
+        : null;
+
+      return [
+        document.id,
+        {
+          isLoading: workflowQuery.isLoading || workflowQuery.isFetching,
+          name:
+            currentStep?.assignedToId === user?.id
+              ? "Tôi"
+              : currentStep?.assignedToName ||
+            (assignedMember ? getMemberLabel(assignedMember) : null) ||
+            currentStep?.assignedToEmail ||
+            null,
+        },
+      ] as const;
+    }),
+  );
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -372,9 +410,27 @@ export function DocumentHubScreen({
   };
 
   const resetBulkUploadModal = () => {
-    setBulkUploadForm(emptyBulkUploadForm);
     setBulkFiles([]);
     setShowBulkUploadModal(false);
+  };
+
+  const handleBulkFilesSelected = (files: File[]) => {
+    const oversizedFiles = getOversizedUploadFiles(files);
+    if (oversizedFiles.length > 0) {
+      toast.error(
+        `${oversizedFiles.map((file) => file.name).join(", ")} vượt giới hạn 20 MB.`,
+      );
+    }
+    setBulkFiles(files.filter(isUploadFileSizeAllowed));
+  };
+
+  const handleDocumentFileSelected = (file: File | null) => {
+    if (file && !isUploadFileSizeAllowed(file)) {
+      toast.error(`${file.name} vượt giới hạn 20 MB.`);
+      setSelectedFile(null);
+      return;
+    }
+    setSelectedFile(file);
   };
 
   const handleBulkUpload = async () => {
@@ -390,18 +446,14 @@ export function DocumentHubScreen({
       toast.error("Vui lòng chọn ít nhất một file.");
       return;
     }
-
-    if (isPastInputDate(bulkUploadForm.dueDate)) {
-      toast.error("Hạn xử lý không được là ngày trong quá khứ.");
+    if (getOversizedUploadFiles(bulkFiles).length > 0) {
+      toast.error(UPLOAD_FILE_SIZE_NOTE);
       return;
     }
 
     setIsBulkUploading(true);
     try {
-      const uploadedFiles = await cdnApi.uploadMultiple(
-        bulkFiles,
-        bulkUploadForm.description.trim() || undefined,
-      );
+      const uploadedFiles = await cdnApi.uploadMultiple(bulkFiles);
 
       await documentApi.bulkImport({
         organizationId,
@@ -409,10 +461,8 @@ export function DocumentHubScreen({
           const sourceFile = bulkFiles[index];
           return {
             title: getFileTitle(uploaded.originalName || sourceFile?.name || "Tài liệu"),
-            description: bulkUploadForm.description.trim() || null,
-            dueDate: bulkUploadForm.dueDate
-              ? new Date(bulkUploadForm.dueDate).toISOString()
-              : null,
+            description: null,
+            dueDate: null,
             version: {
               fileName: uploaded.originalName || sourceFile?.name || "document",
               fileUrl: uploaded.apiUrl || uploaded.APIUrl || uploaded.url,
@@ -421,14 +471,13 @@ export function DocumentHubScreen({
                 sourceFile?.type ||
                 "application/octet-stream",
               fileSize: uploaded.sizeBytes || sourceFile?.size || 0,
-              changeSummary:
-                bulkUploadForm.changeSummary.trim() || "Tải lên hàng loạt",
+              changeSummary: "Nhập tài liệu cũ",
             },
           };
         }),
       });
 
-      toast.success(`Đã tải ${bulkFiles.length} tài liệu. Tài liệu mới nằm ở bản nháp.`);
+      toast.success(`Đã tải ${bulkFiles.length} tài liệu.`);
       resetBulkUploadModal();
       await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
     } catch (err) {
@@ -451,6 +500,10 @@ export function DocumentHubScreen({
     }
     if (!selectedFile) {
       toast.error("Vui lòng chọn file để tạo phiên bản đầu tiên.");
+      return;
+    }
+    if (!isUploadFileSizeAllowed(selectedFile)) {
+      toast.error(UPLOAD_FILE_SIZE_NOTE);
       return;
     }
     if (selectedWorkflowSteps.length === 0) {
@@ -569,7 +622,7 @@ export function DocumentHubScreen({
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             {isRepository
               ? "Lưu trữ các tài liệu đã hoàn tất quy trình xử lý trong tổ chức."
-              : "Theo dõi các tài liệu bạn đã nộp hoặc được gán tham gia xử lý."}
+              : "Theo dõi các tài liệu do bạn tạo và nộp trong tổ chức."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -714,14 +767,28 @@ export function DocumentHubScreen({
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
-                          statusClasses[document.status],
-                        )}
-                      >
-                        {statusLabels[document.status]}
-                      </span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+                            statusClasses[document.status],
+                          )}
+                        >
+                          {statusLabels[document.status]}
+                        </span>
+                        {isSubmissions &&
+                          ["InProgress", "WaitingSignature"].includes(
+                            document.status,
+                          ) && (
+                            <p className="max-w-44 truncate text-xs text-muted-foreground">
+                              {currentApproverByDocument.get(document.id)?.isLoading
+                                ? "Đang tải người duyệt..."
+                                : currentApproverByDocument.get(document.id)?.name
+                                  ? `Đến lượt: ${currentApproverByDocument.get(document.id)?.name}`
+                                  : "Chưa xác định người duyệt"}
+                            </p>
+                          )}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-sm text-foreground">
                       <p className="font-medium">{document.ownerName || "Không rõ"}</p>
@@ -844,7 +911,7 @@ export function DocumentHubScreen({
         className="max-w-2xl"
         contentClassName="max-h-[70vh]"
         title="Tải nhiều file"
-        description="Dành cho chủ sở hữu hoặc quản trị viên. Mỗi file sẽ được tạo thành một tài liệu bản nháp."
+        description="Tải các tài liệu cũ của tổ chức vào kho tài liệu."
         footer={
           <>
             <button
@@ -882,13 +949,17 @@ export function DocumentHubScreen({
             <span className="mt-1 text-xs text-muted-foreground">
               PDF, DOCX, hình ảnh hoặc file nghiệp vụ khác
             </span>
+            <span className="mt-1 text-xs font-medium text-muted-foreground">
+              {UPLOAD_FILE_SIZE_NOTE}
+            </span>
             <input
               type="file"
               multiple
               className="hidden"
-              onChange={(event) =>
-                setBulkFiles(Array.from(event.target.files ?? []))
-              }
+              onChange={(event) => {
+                handleBulkFilesSelected(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
             />
           </label>
 
@@ -931,58 +1002,6 @@ export function DocumentHubScreen({
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label>
-              <span className="text-sm font-medium text-foreground">
-                Hạn xử lý chung
-              </span>
-              <input
-                type="date"
-                min={getTodayInputDate()}
-                value={bulkUploadForm.dueDate}
-                onChange={(event) =>
-                  setBulkUploadForm((prev) => ({
-                    ...prev,
-                    dueDate: event.target.value,
-                  }))
-                }
-                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-
-            <label>
-              <span className="text-sm font-medium text-foreground">
-                Ghi chú phiên bản
-              </span>
-              <input
-                value={bulkUploadForm.changeSummary}
-                onChange={(event) =>
-                  setBulkUploadForm((prev) => ({
-                    ...prev,
-                    changeSummary: event.target.value,
-                  }))
-                }
-                placeholder="Tải lên hàng loạt"
-                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-
-            <label className="md:col-span-2">
-              <span className="text-sm font-medium text-foreground">Mô tả chung</span>
-              <textarea
-                value={bulkUploadForm.description}
-                onChange={(event) =>
-                  setBulkUploadForm((prev) => ({
-                    ...prev,
-                    description: event.target.value,
-                  }))
-                }
-                rows={3}
-                placeholder="Mô tả dùng chung cho các tài liệu được tạo từ danh sách file."
-                className="mt-2 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-          </div>
         </div>
       </AppModal>
 
@@ -1098,12 +1117,16 @@ export function DocumentHubScreen({
                       ? `${selectedFile.type || "Không rõ định dạng"} · ${formatFileSize(selectedFile.size)}`
                       : "PDF, DOCX, hình ảnh hoặc file nghiệp vụ khác"}
                   </span>
+                  <span className="mt-1 text-xs font-medium text-muted-foreground">
+                    {UPLOAD_FILE_SIZE_NOTE}
+                  </span>
                   <input
                     type="file"
                     className="hidden"
-                    onChange={(event) =>
-                      setSelectedFile(event.target.files?.[0] ?? null)
-                    }
+                    onChange={(event) => {
+                      handleDocumentFileSelected(event.target.files?.[0] ?? null);
+                      event.target.value = "";
+                    }}
                   />
                 </label>
               </div>
