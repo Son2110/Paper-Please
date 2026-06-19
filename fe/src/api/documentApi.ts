@@ -139,6 +139,7 @@ export interface BulkDocumentItemRequest {
 
 export interface BulkCreateDocumentRequest {
   organizationId: string;
+  applyDocumentStatus: string;
   documents: BulkDocumentItemRequest[];
 }
 
@@ -238,7 +239,9 @@ export const documentApi = {
   },
 
   getVersions(documentId: string) {
-    return apiRequest<DocumentVersionDTO[]>(`/documents/${documentId}/versions`);
+    return apiRequest<DocumentVersionDTO[]>(
+      `/documents/${documentId}/versions`,
+    );
   },
 
   updateDocument(documentId: string, request: UpdateDocumentRequest) {
@@ -327,13 +330,10 @@ export const documentApi = {
   },
 
   updateComment(commentId: string, request: UpdateCommentRequest) {
-    return apiRequest<DocumentCommentDTO>(
-      `/documents/comments/${commentId}`,
-      {
-        method: "PUT",
-        body: request,
-      },
-    );
+    return apiRequest<DocumentCommentDTO>(`/documents/comments/${commentId}`, {
+      method: "PUT",
+      body: request,
+    });
   },
 
   deleteComment(commentId: string) {
@@ -359,10 +359,13 @@ export const documentApi = {
   },
 
   createWorkflow(documentId: string, request: CreateWorkflowRequest) {
-    return apiRequest<DocumentWorkflowDTO>(`/documents/${documentId}/workflow`, {
-      method: "POST",
-      body: request,
-    });
+    return apiRequest<DocumentWorkflowDTO>(
+      `/documents/${documentId}/workflow`,
+      {
+        method: "POST",
+        body: request,
+      },
+    );
   },
 
   getWorkflow(documentId: string) {

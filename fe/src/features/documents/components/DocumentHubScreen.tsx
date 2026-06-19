@@ -88,7 +88,9 @@ async function getCompletedOrganizationDocuments(organizationId: string) {
       }),
     ),
   );
-  const items = [firstPage, ...remainingPages].flatMap((result) => result.items);
+  const items = [firstPage, ...remainingPages].flatMap(
+    (result) => result.items,
+  );
 
   return {
     ...firstPage,
@@ -141,7 +143,10 @@ const workflowTypeLabels: Record<WorkflowStepType, string> = {
   Acknowledge: "Xác nhận đã đọc",
 };
 
-const workflowAccessLabels: Record<Exclude<DocumentAccessLevel, "Owner">, string> = {
+const workflowAccessLabels: Record<
+  Exclude<DocumentAccessLevel, "Owner">,
+  string
+> = {
   Viewer: "Chỉ xem",
   Editor: "Có thể sửa",
 };
@@ -177,7 +182,12 @@ function getMemberUserId(member: OrganizationMemberDTO) {
 }
 
 function getMemberLabel(member: OrganizationMemberDTO) {
-  return member.user?.displayName || member.user?.email || member.user?.id || "Thành viên";
+  return (
+    member.user?.displayName ||
+    member.user?.email ||
+    member.user?.id ||
+    "Thành viên"
+  );
 }
 
 function normalizeRole(value: OrganizationMemberDTO["role"]): OrganizationRole {
@@ -214,7 +224,8 @@ export function DocumentHubScreen({
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
+  const [createForm, setCreateForm] =
+    useState<CreateFormState>(emptyCreateForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [workflowRows, setWorkflowRows] = useState<WorkflowAssigneeRow[]>([
@@ -297,18 +308,22 @@ export function DocumentHubScreen({
   );
   const currentMembership = useMemo(
     () =>
-      organizationMembers.find((member) => getMemberUserId(member) === user?.id) ??
-      null,
+      organizationMembers.find(
+        (member) => getMemberUserId(member) === user?.id,
+      ) ?? null,
     [organizationMembers, user?.id],
   );
   const canBulkUpload =
     isRepository &&
     (activeOrganization?.owner?.id === user?.id ||
       (currentMembership
-        ? ["Owner", "Administrator"].includes(normalizeRole(currentMembership.role))
+        ? ["Owner", "Administrator"].includes(
+            normalizeRole(currentMembership.role),
+          )
         : false));
   const isLoading = documentsQuery.isLoading || documentsQuery.isFetching;
-  const error = documentsQuery.error instanceof Error ? documentsQuery.error.message : null;
+  const error =
+    documentsQuery.error instanceof Error ? documentsQuery.error.message : null;
 
   const loadDocuments = () => {
     documentsQuery.refetch();
@@ -325,10 +340,7 @@ export function DocumentHubScreen({
   }, [documents, searchQuery]);
 
   const totalItems = filteredDocuments.length;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalItems / DOCUMENT_PAGE_SIZE),
-  );
+  const totalPages = Math.max(1, Math.ceil(totalItems / DOCUMENT_PAGE_SIZE));
   const paginatedDocuments = useMemo(
     () =>
       filteredDocuments.slice(
@@ -368,9 +380,9 @@ export function DocumentHubScreen({
             currentStep?.assignedToId === user?.id
               ? "Tôi"
               : currentStep?.assignedToName ||
-            (assignedMember ? getMemberLabel(assignedMember) : null) ||
-            currentStep?.assignedToEmail ||
-            null,
+                (assignedMember ? getMemberLabel(assignedMember) : null) ||
+                currentStep?.assignedToEmail ||
+                null,
         },
       ] as const;
     }),
@@ -386,10 +398,14 @@ export function DocumentHubScreen({
       processing: documents.filter((document) =>
         ["InProgress", "WaitingSignature"].includes(document.status),
       ).length,
-      completed: documents.filter((document) => document.status === "Completed").length,
-      rejected: documents.filter((document) => document.status === "Rejected").length,
-      withDeadline: documents.filter((document) => Boolean(document.dueDate)).length,
-      ownedByMe: documents.filter((document) => document.ownerId === user?.id).length,
+      completed: documents.filter((document) => document.status === "Completed")
+        .length,
+      rejected: documents.filter((document) => document.status === "Rejected")
+        .length,
+      withDeadline: documents.filter((document) => Boolean(document.dueDate))
+        .length,
+      ownedByMe: documents.filter((document) => document.ownerId === user?.id)
+        .length,
       visible: filteredDocuments.length,
     }),
     [documents, filteredDocuments.length, user?.id],
@@ -439,7 +455,9 @@ export function DocumentHubScreen({
       return;
     }
     if (!canBulkUpload) {
-      toast.error("Chỉ chủ sở hữu hoặc quản trị viên tổ chức mới được tải nhiều tài liệu.");
+      toast.error(
+        "Chỉ chủ sở hữu hoặc quản trị viên tổ chức mới được tải nhiều tài liệu.",
+      );
       return;
     }
     if (bulkFiles.length === 0) {
@@ -457,10 +475,13 @@ export function DocumentHubScreen({
 
       await documentApi.bulkImport({
         organizationId,
+        applyDocumentStatus: "Completed",
         documents: uploadedFiles.map((uploaded, index) => {
           const sourceFile = bulkFiles[index];
           return {
-            title: getFileTitle(uploaded.originalName || sourceFile?.name || "Tài liệu"),
+            title: getFileTitle(
+              uploaded.originalName || sourceFile?.name || "Tài liệu",
+            ),
             description: null,
             dueDate: null,
             version: {
@@ -479,7 +500,9 @@ export function DocumentHubScreen({
 
       toast.success(`Đã tải ${bulkFiles.length} tài liệu.`);
       resetBulkUploadModal();
-      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.all,
+      });
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Không thể tải nhiều tài liệu.",
@@ -532,19 +555,25 @@ export function DocumentHubScreen({
         organizationId,
         title: createForm.title.trim(),
         description: createForm.description.trim() || null,
-        dueDate: createForm.dueDate ? new Date(createForm.dueDate).toISOString() : null,
+        dueDate: createForm.dueDate
+          ? new Date(createForm.dueDate).toISOString()
+          : null,
       });
       createdDocumentId = document.id;
 
       await documentApi.uploadVersion(document.id, {
         fileName: uploaded.originalName || selectedFile.name,
         fileUrl: uploaded.apiUrl || uploaded.APIUrl || uploaded.url,
-        mimeType: uploaded.mimeType || selectedFile.type || "application/octet-stream",
+        mimeType:
+          uploaded.mimeType || selectedFile.type || "application/octet-stream",
         fileSize: uploaded.sizeBytes || selectedFile.size,
         changeSummary: createForm.changeSummary.trim() || "Phiên bản đầu tiên",
       });
 
-      const accessByAssignee = new Map<string, Exclude<DocumentAccessLevel, "Owner">>();
+      const accessByAssignee = new Map<
+        string,
+        Exclude<DocumentAccessLevel, "Owner">
+      >();
       workflowRows.forEach((row) => {
         if (!row.userId || row.userId === user?.id) return;
         const currentAccess = accessByAssignee.get(row.userId);
@@ -565,12 +594,16 @@ export function DocumentHubScreen({
 
       toast.success("Đã tạo tài liệu và quy trình phê duyệt.");
       resetCreateModal();
-      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.all,
+      });
     } catch (err) {
       if (createdDocumentId) {
         try {
           await documentApi.deleteDocument(createdDocumentId);
-          await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.documents.all,
+          });
           toast.error(
             err instanceof Error
               ? `Không thể nộp tài liệu: ${err.message}. Bản nháp vừa tạo đã được hủy.`
@@ -586,7 +619,9 @@ export function DocumentHubScreen({
         return;
       }
 
-      toast.error(err instanceof Error ? err.message : "Không thể tạo tài liệu.");
+      toast.error(
+        err instanceof Error ? err.message : "Không thể tạo tài liệu.",
+      );
     } finally {
       setIsCreating(false);
     }
@@ -601,9 +636,13 @@ export function DocumentHubScreen({
       await documentApi.deleteDocument(documentId);
       setDeleteTarget(null);
       toast.success("Đã xóa tài liệu.");
-      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.all,
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không thể xóa tài liệu.");
+      toast.error(
+        err instanceof Error ? err.message : "Không thể xóa tài liệu.",
+      );
     } finally {
       setDeletingId(null);
     }
@@ -632,7 +671,9 @@ export function DocumentHubScreen({
             disabled={isLoading}
             className="inline-flex h-10 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
-            <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            <RefreshCcw
+              className={cn("h-4 w-4", isLoading && "animate-spin")}
+            />
             Tải lại
           </button>
           {canBulkUpload && (
@@ -734,7 +775,10 @@ export function DocumentHubScreen({
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                  <td
+                    colSpan={5}
+                    className="px-5 py-12 text-center text-sm text-muted-foreground"
+                  >
                     <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
                     Đang tải tài liệu...
                   </td>
@@ -781,9 +825,11 @@ export function DocumentHubScreen({
                             document.status,
                           ) && (
                             <p className="max-w-44 truncate text-xs text-muted-foreground">
-                              {currentApproverByDocument.get(document.id)?.isLoading
+                              {currentApproverByDocument.get(document.id)
+                                ?.isLoading
                                 ? "Đang tải người duyệt..."
-                                : currentApproverByDocument.get(document.id)?.name
+                                : currentApproverByDocument.get(document.id)
+                                      ?.name
                                   ? `Đến lượt: ${currentApproverByDocument.get(document.id)?.name}`
                                   : "Chưa xác định người duyệt"}
                             </p>
@@ -791,7 +837,9 @@ export function DocumentHubScreen({
                       </div>
                     </td>
                     <td className="px-5 py-4 text-sm text-foreground">
-                      <p className="font-medium">{document.ownerName || "Không rõ"}</p>
+                      <p className="font-medium">
+                        {document.ownerName || "Không rõ"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(document.createdDate)}
                       </p>
@@ -804,10 +852,16 @@ export function DocumentHubScreen({
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        <IconButton label="Xem chi tiết" onClick={() => onOpenDetail(document.id)}>
+                        <IconButton
+                          label="Xem chi tiết"
+                          onClick={() => onOpenDetail(document.id)}
+                        >
                           <Eye className="h-4 w-4" />
                         </IconButton>
-                        <IconButton label="Mở file trong chi tiết" onClick={() => onOpenDetail(document.id)}>
+                        <IconButton
+                          label="Mở file trong chi tiết"
+                          onClick={() => onOpenDetail(document.id)}
+                        >
                           <Download className="h-4 w-4" />
                         </IconButton>
                         <IconButton
@@ -979,7 +1033,8 @@ export function DocumentHubScreen({
                         {file.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {file.type || "Không rõ định dạng"} · {formatFileSize(file.size)}
+                        {file.type || "Không rõ định dạng"} ·{" "}
+                        {formatFileSize(file.size)}
                       </p>
                     </div>
                     <button
@@ -1001,7 +1056,6 @@ export function DocumentHubScreen({
               </div>
             </div>
           )}
-
         </div>
       </AppModal>
 
@@ -1037,195 +1091,207 @@ export function DocumentHubScreen({
         }
       >
         <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="md:col-span-2">
-                  <span className="text-sm font-medium text-foreground">
-                    Tên tài liệu
-                  </span>
-                  <input
-                    value={createForm.title}
-                    onChange={(event) =>
-                      setCreateForm((prev) => ({ ...prev, title: event.target.value }))
-                    }
-                    placeholder="Ví dụ: Hợp đồng dịch vụ tháng 6"
-                    className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="md:col-span-2">
+              <span className="text-sm font-medium text-foreground">
+                Tên tài liệu
+              </span>
+              <input
+                value={createForm.title}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    title: event.target.value,
+                  }))
+                }
+                placeholder="Ví dụ: Hợp đồng dịch vụ tháng 6"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
 
-                <label>
-                  <span className="text-sm font-medium text-foreground">
-                    Hạn xử lý
-                  </span>
-                  <input
-                    type="date"
-                    min={getTodayInputDate()}
-                    value={createForm.dueDate}
-                    onChange={(event) =>
-                      setCreateForm((prev) => ({ ...prev, dueDate: event.target.value }))
-                    }
-                    className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
+            <label>
+              <span className="text-sm font-medium text-foreground">
+                Hạn xử lý
+              </span>
+              <input
+                type="date"
+                min={getTodayInputDate()}
+                value={createForm.dueDate}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    dueDate: event.target.value,
+                  }))
+                }
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
 
-                <label>
-                  <span className="text-sm font-medium text-foreground">
-                    Ghi chú phiên bản
-                  </span>
-                  <input
-                    value={createForm.changeSummary}
-                    onChange={(event) =>
-                      setCreateForm((prev) => ({
-                        ...prev,
-                        changeSummary: event.target.value,
-                      }))
-                    }
-                    placeholder="Phiên bản đầu tiên"
-                    className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
+            <label>
+              <span className="text-sm font-medium text-foreground">
+                Ghi chú phiên bản
+              </span>
+              <input
+                value={createForm.changeSummary}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    changeSummary: event.target.value,
+                  }))
+                }
+                placeholder="Phiên bản đầu tiên"
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
 
-                <label className="md:col-span-2">
-                  <span className="text-sm font-medium text-foreground">
-                    Mô tả
-                  </span>
-                  <textarea
-                    value={createForm.description}
-                    onChange={(event) =>
-                      setCreateForm((prev) => ({
-                        ...prev,
-                        description: event.target.value,
-                      }))
-                    }
-                    rows={3}
-                    placeholder="Mô tả ngắn để thành viên nhận biết tài liệu."
-                    className="mt-2 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
-              </div>
+            <label className="md:col-span-2">
+              <span className="text-sm font-medium text-foreground">Mô tả</span>
+              <textarea
+                value={createForm.description}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="Mô tả ngắn để thành viên nhận biết tài liệu."
+                className="mt-2 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+          </div>
 
-              <div>
-                <span className="text-sm font-medium text-foreground">
-                  File tài liệu
-                </span>
-                <label className="mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-background px-4 py-8 text-center transition hover:bg-muted">
-                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
-                  <span className="mt-3 text-sm font-semibold text-foreground">
-                    {selectedFile ? selectedFile.name : "Chọn file để upload"}
-                  </span>
-                  <span className="mt-1 text-xs text-muted-foreground">
-                    {selectedFile
-                      ? `${selectedFile.type || "Không rõ định dạng"} · ${formatFileSize(selectedFile.size)}`
-                      : "PDF, DOCX, hình ảnh hoặc file nghiệp vụ khác"}
-                  </span>
-                  <span className="mt-1 text-xs font-medium text-muted-foreground">
-                    {UPLOAD_FILE_SIZE_NOTE}
-                  </span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(event) => {
-                      handleDocumentFileSelected(event.target.files?.[0] ?? null);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
+          <div>
+            <span className="text-sm font-medium text-foreground">
+              File tài liệu
+            </span>
+            <label className="mt-2 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-background px-4 py-8 text-center transition hover:bg-muted">
+              <UploadCloud className="h-8 w-8 text-muted-foreground" />
+              <span className="mt-3 text-sm font-semibold text-foreground">
+                {selectedFile ? selectedFile.name : "Chọn file để upload"}
+              </span>
+              <span className="mt-1 text-xs text-muted-foreground">
+                {selectedFile
+                  ? `${selectedFile.type || "Không rõ định dạng"} · ${formatFileSize(selectedFile.size)}`
+                  : "PDF, DOCX, hình ảnh hoặc file nghiệp vụ khác"}
+              </span>
+              <span className="mt-1 text-xs font-medium text-muted-foreground">
+                {UPLOAD_FILE_SIZE_NOTE}
+              </span>
+              <input
+                type="file"
+                className="hidden"
+                onChange={(event) => {
+                  handleDocumentFileSelected(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
 
-              <details open className="rounded-lg border bg-background p-4">
-                <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                  Quy trình xử lý
-                </summary>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Chọn người phê duyệt và quyền truy cập tài liệu của từng người.
-                </p>
+          <details open className="rounded-lg border bg-background p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              Quy trình xử lý
+            </summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Chọn người phê duyệt và quyền truy cập tài liệu của từng người.
+            </p>
 
-                <div className="mt-4 space-y-3">
-                  {workflowRows.map((row, index) => (
-                    <div
-                      key={row.id}
-                      className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_150px_auto_auto] md:items-center"
-                    >
-                      <div className="text-sm font-semibold text-muted-foreground">
-                        Bước {index + 1}
-                      </div>
-                      <select
-                        value={row.userId}
-                        onChange={(event) =>
-                          setWorkflowRows((prev) =>
-                            prev.map((item) =>
-                              item.id === row.id
-                                ? { ...item, userId: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                        className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      >
-                        <option value="">Chọn người xử lý</option>
-                        {organizationMembers.map((member) => {
-                          const memberUserId = getMemberUserId(member);
-                          if (!memberUserId) return null;
-                          if (memberUserId === user?.id) return null;
-                          return (
-                            <option
-                              key={member.memberId || member.id || memberUserId}
-                              value={memberUserId}
-                            >
-                              {getMemberLabel(member)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <span className="inline-flex h-10 items-center rounded-lg border bg-background px-3 text-sm font-semibold text-muted-foreground">
-                        {workflowTypeLabels.Approve}
-                      </span>
-                      <select
-                        value={row.accessLevel}
-                        onChange={(event) =>
-                          setWorkflowRows((prev) =>
-                            prev.map((item) =>
-                              item.id === row.id
-                                ? {
-                                    ...item,
-                                    accessLevel: event.target
-                                      .value as Exclude<DocumentAccessLevel, "Owner">,
-                                  }
-                                : item,
-                            ),
-                          )
-                        }
-                        className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        title="Quyền truy cập tài liệu"
-                      >
-                        <option value="Viewer">{workflowAccessLabels.Viewer}</option>
-                        <option value="Editor">{workflowAccessLabels.Editor}</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setWorkflowRows((prev) =>
-                            prev.length === 1
-                              ? [createWorkflowRow()]
-                              : prev.filter((item) => item.id !== row.id),
-                          )
-                        }
-                        className="inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-destructive"
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setWorkflowRows((prev) => [...prev, createWorkflowRow()])}
-                  className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+            <div className="mt-4 space-y-3">
+              {workflowRows.map((row, index) => (
+                <div
+                  key={row.id}
+                  className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_150px_auto_auto] md:items-center"
                 >
-                  <UserPlus className="h-4 w-4" />
-                  Thêm bước
-                </button>
-              </details>
+                  <div className="text-sm font-semibold text-muted-foreground">
+                    Bước {index + 1}
+                  </div>
+                  <select
+                    value={row.userId}
+                    onChange={(event) =>
+                      setWorkflowRows((prev) =>
+                        prev.map((item) =>
+                          item.id === row.id
+                            ? { ...item, userId: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                    className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="">Chọn người xử lý</option>
+                    {organizationMembers.map((member) => {
+                      const memberUserId = getMemberUserId(member);
+                      if (!memberUserId) return null;
+                      if (memberUserId === user?.id) return null;
+                      return (
+                        <option
+                          key={member.memberId || member.id || memberUserId}
+                          value={memberUserId}
+                        >
+                          {getMemberLabel(member)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <span className="inline-flex h-10 items-center rounded-lg border bg-background px-3 text-sm font-semibold text-muted-foreground">
+                    {workflowTypeLabels.Approve}
+                  </span>
+                  <select
+                    value={row.accessLevel}
+                    onChange={(event) =>
+                      setWorkflowRows((prev) =>
+                        prev.map((item) =>
+                          item.id === row.id
+                            ? {
+                                ...item,
+                                accessLevel: event.target.value as Exclude<
+                                  DocumentAccessLevel,
+                                  "Owner"
+                                >,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                    className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    title="Quyền truy cập tài liệu"
+                  >
+                    <option value="Viewer">
+                      {workflowAccessLabels.Viewer}
+                    </option>
+                    <option value="Editor">
+                      {workflowAccessLabels.Editor}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setWorkflowRows((prev) =>
+                        prev.length === 1
+                          ? [createWorkflowRow()]
+                          : prev.filter((item) => item.id !== row.id),
+                      )
+                    }
+                    className="inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-destructive"
+                  >
+                    Xóa
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setWorkflowRows((prev) => [...prev, createWorkflowRow()])
+              }
+              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+            >
+              <UserPlus className="h-4 w-4" />
+              Thêm bước
+            </button>
+          </details>
         </div>
       </AppModal>
     </div>
