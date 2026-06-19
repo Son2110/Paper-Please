@@ -64,6 +64,39 @@ interface WorkflowAssigneeRow {
 
 const DOCUMENT_PAGE_SIZE = 10;
 const SUBMISSION_FETCH_PAGE_SIZE = 200;
+const REPOSITORY_FETCH_PAGE_SIZE = 100;
+
+async function getCompletedOrganizationDocuments(organizationId: string) {
+  const firstPage = await documentApi.getOrganizationDocuments(organizationId, {
+    status: "Completed",
+    page: 1,
+    pageSize: REPOSITORY_FETCH_PAGE_SIZE,
+  });
+
+  if (firstPage.totalPages <= 1) return firstPage;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      documentApi.getOrganizationDocuments(organizationId, {
+        status: "Completed",
+        page: index + 2,
+        pageSize: REPOSITORY_FETCH_PAGE_SIZE,
+      }),
+    ),
+  );
+  const items = [firstPage, ...remainingPages].flatMap((result) => result.items);
+
+  return {
+    ...firstPage,
+    currentPage: 1,
+    pageCount: items.length,
+    totalItems: items.length,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+    items,
+  };
+}
 
 const emptyCreateForm: CreateFormState = {
   title: "",
@@ -207,12 +240,14 @@ export function DocumentHubScreen({
       page: number;
       pageSize: number;
     } => ({
-      searchQuery: searchQuery.trim(),
+      searchQuery: isRepository ? "" : searchQuery.trim(),
       status: isRepository ? ("Completed" as DocumentStatus) : statusFilter,
-      page: isRepository ? page : 1,
-      pageSize: isRepository ? DOCUMENT_PAGE_SIZE : SUBMISSION_FETCH_PAGE_SIZE,
+      page: 1,
+      pageSize: isRepository
+        ? REPOSITORY_FETCH_PAGE_SIZE
+        : SUBMISSION_FETCH_PAGE_SIZE,
     }),
-    [isRepository, page, searchQuery, statusFilter],
+    [isRepository, searchQuery, statusFilter],
   );
 
   useEffect(() => {
@@ -225,12 +260,7 @@ export function DocumentHubScreen({
       : ["documents", "mine", organizationId ?? "none", documentFilters],
     queryFn: () =>
       isRepository
-        ? documentApi.getOrganizationDocuments(organizationId ?? "", {
-            searchQuery: documentFilters.searchQuery,
-            status: documentFilters.status,
-            page: documentFilters.page,
-            pageSize: documentFilters.pageSize,
-          })
+        ? getCompletedOrganizationDocuments(organizationId ?? "")
         : documentApi.getMyDocuments({
             searchQuery: documentFilters.searchQuery,
             status: documentFilters.status,
@@ -294,24 +324,18 @@ export function DocumentHubScreen({
     );
   }, [documents, searchQuery]);
 
-  const totalItems = isRepository
-    ? documentsQuery.data?.totalItems ?? filteredDocuments.length
-    : filteredDocuments.length;
+  const totalItems = filteredDocuments.length;
   const totalPages = Math.max(
     1,
-    isRepository
-      ? documentsQuery.data?.totalPages ?? Math.ceil(totalItems / DOCUMENT_PAGE_SIZE)
-      : Math.ceil(totalItems / DOCUMENT_PAGE_SIZE),
+    Math.ceil(totalItems / DOCUMENT_PAGE_SIZE),
   );
   const paginatedDocuments = useMemo(
     () =>
-      isRepository
-        ? filteredDocuments
-        : filteredDocuments.slice(
-            (page - 1) * DOCUMENT_PAGE_SIZE,
-            page * DOCUMENT_PAGE_SIZE,
-          ),
-    [filteredDocuments, isRepository, page],
+      filteredDocuments.slice(
+        (page - 1) * DOCUMENT_PAGE_SIZE,
+        page * DOCUMENT_PAGE_SIZE,
+      ),
+    [filteredDocuments, page],
   );
 
   useEffect(() => {
