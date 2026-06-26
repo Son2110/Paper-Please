@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import {
 } from "@/api/organizationApi";
 import { BillingScreen } from "@/features/billing/components/BillingScreen";
 import { OrganizationCreateForm } from "@/features/organizations/components/OrganizationCreateForm";
+import { SettingsScreen } from "@/features/settings/components/SettingsScreen";
 import { BrandIcon } from "@/shared/components/BrandIcon";
 import { useAuth } from "@/context/AuthContext";
 import { useOrganization } from "@/context/OrganizationContext";
@@ -34,7 +36,7 @@ interface WorkspaceSelectScreenProps {
   onContinue: () => void;
 }
 
-type WorkspaceView = "organizations" | "billing";
+type WorkspaceView = "organizations" | "billing" | "settings";
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -72,15 +74,19 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
   } = useOrganization();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(organizations.length === 0);
+  const getWorkspaceView = (value: string | null): WorkspaceView => {
+    if (value === "billing" || value === "settings") return value;
+    return "organizations";
+  };
   const [view, setViewState] = useState<WorkspaceView>(
-    searchParams.get("workspace") === "billing" ? "billing" : "organizations",
+    getWorkspaceView(searchParams.get("workspace")),
   );
 
   const switchView = (nextView: WorkspaceView) => {
     setViewState(nextView);
     const nextParams = new URLSearchParams(searchParams);
-    if (nextView === "billing") {
-      nextParams.set("workspace", "billing");
+    if (nextView === "billing" || nextView === "settings") {
+      nextParams.set("workspace", nextView);
     } else {
       nextParams.delete("workspace");
     }
@@ -88,9 +94,7 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
   };
 
   useEffect(() => {
-    if (searchParams.get("workspace") === "billing") {
-      setViewState("billing");
-    }
+    setViewState(getWorkspaceView(searchParams.get("workspace")));
   }, [searchParams]);
 
   const filteredOrganizations = organizations.filter((organization) =>
@@ -130,23 +134,65 @@ export function WorkspaceSelectScreen({ onContinue }: WorkspaceSelectScreenProps
                 Paper Please
               </p>
               <h1 className="truncate text-lg font-bold text-foreground">
-                {view === "billing" ? "Gói dịch vụ" : "Chọn tổ chức"}
+                {view === "billing"
+                  ? "Gói dịch vụ"
+                  : view === "settings"
+                    ? "Cài đặt"
+                    : "Chọn tổ chức"}
               </h1>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold hover:bg-muted"
-          >
-            <LogOut className="h-4 w-4" />
-            Đăng xuất
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => switchView("settings")}
+              className={cn(
+                "inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold hover:bg-muted",
+                view === "settings" && "border-primary bg-primary/5 text-primary",
+              )}
+            >
+              <Settings className="h-4 w-4" />
+              Cài đặt
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold hover:bg-muted"
+            >
+              <LogOut className="h-4 w-4" />
+              Đăng xuất
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-        {view === "billing" ? (
+        {view === "settings" ? (
+          <div className="space-y-5">
+            <section className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Tài khoản của bạn
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">
+                  Cài đặt trước khi vào tổ chức
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                  Cập nhật thông tin cá nhân, mật khẩu và các thiết lập tài khoản mà không cần chọn tổ chức.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => switchView("organizations")}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border bg-background px-4 text-sm font-semibold hover:bg-muted"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Quay lại tổ chức
+              </button>
+            </section>
+            <SettingsScreen />
+          </div>
+        ) : view === "billing" ? (
           <div className="space-y-5">
             <section className="flex flex-col gap-4 rounded-lg border bg-card p-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
