@@ -22,6 +22,7 @@ export type WorkflowStepStatus =
 export interface DocumentDTO {
   id: string;
   organizationId: string;
+  departmentId?: string | null;
   title: string;
   description?: string | null;
   status: DocumentStatus;
@@ -110,6 +111,7 @@ export interface DocumentDetailDTO {
 
 export interface CreateDocumentRequest {
   organizationId: string;
+  departmentId?: string | null;
   title: string;
   description?: string | null;
   dueDate?: string | null;
@@ -118,6 +120,7 @@ export interface CreateDocumentRequest {
 export interface UpdateDocumentRequest {
   title: string;
   description?: string | null;
+  departmentId?: string | null;
   dueDate?: string | null;
   status: DocumentStatus;
 }
@@ -134,6 +137,7 @@ export interface BulkDocumentItemRequest {
   title: string;
   description?: string | null;
   dueDate?: string | null;
+  departmentId?: string | null;
   version: UploadDocumentVersionRequest;
 }
 

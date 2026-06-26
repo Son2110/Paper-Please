@@ -14,6 +14,7 @@ dist-ssr
 .env.local
 .git-backup/
 .agents/
+docs/
 skills-lock.json
 # Editor directories and files
 .vscode/*

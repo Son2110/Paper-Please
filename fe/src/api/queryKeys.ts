@@ -28,6 +28,15 @@ export const queryKeys = {
     ) => ["documents", "list", organizationId ?? "none", filters ?? {}] as const,
     pendingTasks: (params?: unknown) => ["documents", "pending-tasks", params ?? {}] as const,
   },
+  departments: {
+    all: ["departments"] as const,
+    byOrganization: (organizationId?: string | null) =>
+      ["departments", organizationId ?? "none"] as const,
+    mine: (organizationId?: string | null) =>
+      ["departments", organizationId ?? "none", "mine"] as const,
+    members: (departmentId?: string | null, params?: unknown) =>
+      ["departments", departmentId ?? "none", "members", params ?? {}] as const,
+  },
   notifications: {
     all: ["notifications"] as const,
     mine: (params?: unknown) => ["notifications", "mine", params ?? {}] as const,

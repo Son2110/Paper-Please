@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Calendar,
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cdnApi } from "@/api/cdnApi";
+import { departmentApi } from "@/api/departmentApi";
 import {
   documentApi,
   type DocumentAccessLevel,
@@ -57,6 +58,7 @@ interface CreateFormState {
   description: string;
   dueDate: string;
   changeSummary: string;
+  departmentId: string;
 }
 
 interface WorkflowAssigneeRow {
@@ -109,6 +111,7 @@ const emptyCreateForm: CreateFormState = {
   description: "",
   dueDate: "",
   changeSummary: "",
+  departmentId: "",
 };
 
 const statusLabels: Record<DocumentStatus, string> = {
@@ -228,6 +231,7 @@ export function DocumentHubScreen({
     useState<CreateFormState>(emptyCreateForm);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkDepartmentId, setBulkDepartmentId] = useState("");
   const [workflowRows, setWorkflowRows] = useState<WorkflowAssigneeRow[]>([
     createWorkflowRow(),
   ]);
@@ -293,6 +297,31 @@ export function DocumentHubScreen({
     staleTime: 2 * 60_000,
   });
 
+  const departmentsQuery = useQuery({
+    queryKey: queryKeys.departments.byOrganization(organizationId),
+    queryFn: () => departmentApi.getByOrganization(organizationId ?? ""),
+    enabled: Boolean(organizationId),
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
+
+  const selectedDepartmentMembersQuery = useQuery({
+    queryKey: queryKeys.departments.members(createForm.departmentId, {
+      organizationId,
+      page: 1,
+      pageSize: 100,
+      scope: "document-workflow",
+    }),
+    queryFn: () =>
+      departmentApi.getMembers(createForm.departmentId, organizationId ?? "", {
+        page: 1,
+        pageSize: 100,
+      }),
+    enabled: Boolean(showCreateModal && organizationId && createForm.departmentId),
+    staleTime: 30_000,
+    retry: false,
+  });
+
   const documents = useMemo(() => {
     const items = documentsQuery.data?.items ?? [];
     if (isRepository) return items;
@@ -305,6 +334,78 @@ export function DocumentHubScreen({
   const organizationMembers = useMemo(
     () => membersQuery.data?.items ?? [],
     [membersQuery.data?.items],
+  );
+  const departments = useMemo(
+    () => departmentsQuery.data ?? [],
+    [departmentsQuery.data],
+  );
+  const departmentWorkflowMembers = useMemo(
+    () => selectedDepartmentMembersQuery.data?.items ?? [],
+    [selectedDepartmentMembersQuery.data?.items],
+  );
+  const workflowMemberOptions = useMemo(() => {
+    if (createForm.departmentId) {
+      return departmentWorkflowMembers
+        .map((member) => ({
+          id: member.userId,
+          key: member.userId,
+          label: member.displayName || member.email || "Thành viên",
+        }))
+        .filter((member) => member.id && member.id !== user?.id);
+    }
+
+    return organizationMembers
+      .map((member) => {
+        const memberUserId = getMemberUserId(member);
+        return {
+          id: memberUserId,
+          key: member.memberId || member.id || memberUserId,
+          label: getMemberLabel(member),
+        };
+      })
+      .filter((member) => member.id && member.id !== user?.id);
+  }, [
+    createForm.departmentId,
+    departmentWorkflowMembers,
+    organizationMembers,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+
+    const validUserIds = new Set(
+      workflowMemberOptions.map((member) => member.id),
+    );
+
+    setWorkflowRows((prev) => {
+      let changed = false;
+      const nextRows = prev.map((row) => {
+        if (row.userId && !validUserIds.has(row.userId)) {
+          changed = true;
+          return { ...row, userId: "" };
+        }
+
+        return row;
+      });
+
+      return changed ? nextRows : prev;
+    });
+  }, [showCreateModal, workflowMemberOptions]);
+
+  const departmentNameById = useMemo(
+    () =>
+      new Map(
+        departments.map((department) => [department.id, department.name]),
+      ),
+    [departments],
+  );
+  const getDepartmentName = useCallback(
+    (departmentId?: string | null) =>
+      departmentId
+        ? departmentNameById.get(departmentId) || "Phòng ban không xác định"
+        : "Chưa phân loại",
+    [departmentNameById],
   );
   const currentMembership = useMemo(
     () =>
@@ -333,11 +434,16 @@ export function DocumentHubScreen({
     const keyword = searchQuery.trim().toLowerCase();
     if (!keyword) return documents;
     return documents.filter((document) =>
-      [document.title, document.description, document.ownerName]
+      [
+        document.title,
+        document.description,
+        document.ownerName,
+        getDepartmentName(document.departmentId),
+      ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(keyword)),
     );
-  }, [documents, searchQuery]);
+  }, [documents, getDepartmentName, searchQuery]);
 
   const totalItems = filteredDocuments.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / DOCUMENT_PAGE_SIZE));
@@ -427,6 +533,7 @@ export function DocumentHubScreen({
 
   const resetBulkUploadModal = () => {
     setBulkFiles([]);
+    setBulkDepartmentId("");
     setShowBulkUploadModal(false);
   };
 
@@ -484,6 +591,7 @@ export function DocumentHubScreen({
             ),
             description: null,
             dueDate: null,
+            departmentId: bulkDepartmentId || null,
             version: {
               fileName: uploaded.originalName || sourceFile?.name || "document",
               fileUrl: uploaded.apiUrl || uploaded.APIUrl || uploaded.url,
@@ -555,6 +663,7 @@ export function DocumentHubScreen({
         organizationId,
         title: createForm.title.trim(),
         description: createForm.description.trim() || null,
+        departmentId: createForm.departmentId || null,
         dueDate: createForm.dueDate
           ? new Date(createForm.dueDate).toISOString()
           : null,
@@ -762,12 +871,13 @@ export function DocumentHubScreen({
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[880px]">
             <thead>
               <tr className="border-b bg-muted/40">
                 <TableHead>Tài liệu</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>Người tạo</TableHead>
+                <TableHead>Phòng ban</TableHead>
                 <TableHead>Hạn xử lý</TableHead>
                 <TableHead align="right">Thao tác</TableHead>
               </tr>
@@ -776,7 +886,7 @@ export function DocumentHubScreen({
               {isLoading && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-5 py-12 text-center text-sm text-muted-foreground"
                   >
                     <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
@@ -843,6 +953,13 @@ export function DocumentHubScreen({
                       <p className="text-xs text-muted-foreground">
                         {formatDate(document.createdDate)}
                       </p>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-foreground">
+                      <span className="inline-flex max-w-44 rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <span className="truncate">
+                          {getDepartmentName(document.departmentId)}
+                        </span>
+                      </span>
                     </td>
                     <td className="px-5 py-4">
                       <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -993,6 +1110,25 @@ export function DocumentHubScreen({
         }
       >
         <div className="space-y-5">
+          <label>
+            <span className="text-sm font-medium text-foreground">
+              Phòng ban
+            </span>
+            <select
+              value={bulkDepartmentId}
+              onChange={(event) => setBulkDepartmentId(event.target.value)}
+              disabled={departments.length === 0}
+              className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">Chưa phân loại</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed bg-background px-4 py-8 text-center transition hover:bg-muted">
             <UploadCloud className="h-8 w-8 text-muted-foreground" />
             <span className="mt-3 text-sm font-semibold text-foreground">
@@ -1129,6 +1265,30 @@ export function DocumentHubScreen({
 
             <label>
               <span className="text-sm font-medium text-foreground">
+                Phòng ban
+              </span>
+              <select
+                value={createForm.departmentId}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    departmentId: event.target.value,
+                  }))
+                }
+                disabled={departments.length === 0}
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">Chưa phân loại</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-sm font-medium text-foreground">
                 Ghi chú phiên bản
               </span>
               <input
@@ -1197,6 +1357,20 @@ export function DocumentHubScreen({
               Chọn người phê duyệt và quyền truy cập tài liệu của từng người.
             </p>
 
+            {createForm.departmentId ? (
+              <p className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Chỉ hiển thị thành viên thuộc phòng ban{" "}
+                {getDepartmentName(createForm.departmentId)}.
+              </p>
+            ) : null}
+            {createForm.departmentId &&
+            !selectedDepartmentMembersQuery.isFetching &&
+            workflowMemberOptions.length === 0 ? (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Phòng ban này chưa có thành viên phù hợp để phê duyệt.
+              </p>
+            ) : null}
+
             <div className="mt-4 space-y-3">
               {workflowRows.map((row, index) => (
                 <div
@@ -1217,22 +1391,23 @@ export function DocumentHubScreen({
                         ),
                       )
                     }
-                    className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    disabled={Boolean(
+                      createForm.departmentId &&
+                        selectedDepartmentMembersQuery.isFetching,
+                    )}
+                    className="h-10 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <option value="">Chọn người xử lý</option>
-                    {organizationMembers.map((member) => {
-                      const memberUserId = getMemberUserId(member);
-                      if (!memberUserId) return null;
-                      if (memberUserId === user?.id) return null;
-                      return (
-                        <option
-                          key={member.memberId || member.id || memberUserId}
-                          value={memberUserId}
-                        >
-                          {getMemberLabel(member)}
-                        </option>
-                      );
-                    })}
+                    <option value="">
+                      {createForm.departmentId &&
+                      selectedDepartmentMembersQuery.isFetching
+                        ? "Đang tải thành viên phòng ban..."
+                        : "Chọn người xử lý"}
+                    </option>
+                    {workflowMemberOptions.map((member) => (
+                      <option key={member.key} value={member.id}>
+                        {member.label}
+                      </option>
+                    ))}
                   </select>
                   <span className="inline-flex h-10 items-center rounded-lg border bg-background px-3 text-sm font-semibold text-muted-foreground">
                     {workflowTypeLabels.Approve}

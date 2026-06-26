@@ -782,6 +782,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
       await documentApi.updateDocument(docId, {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
+        departmentId: document.departmentId || null,
         dueDate: editDueDate || undefined,
         status: document.status,
       });

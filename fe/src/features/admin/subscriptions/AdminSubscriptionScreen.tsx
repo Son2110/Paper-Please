@@ -30,11 +30,8 @@ interface SubscriptionFormState {
   id?: string;
   name: string;
   description: string;
-  type: string;
   price: string;
   durationDays: string;
-  pointsCost: string;
-  rewardPoints: string;
   maxOrganizations: string;
   maxOrganizationUsers: string;
   maxStorageGb: string;
@@ -58,11 +55,8 @@ function createEmptyForm(): SubscriptionFormState {
   return {
     name: "",
     description: "",
-    type: "Basic",
     price: "0",
     durationDays: "30",
-    pointsCost: "",
-    rewardPoints: "0",
     maxOrganizations: "",
     maxOrganizationUsers: "",
     maxStorageGb: "",
@@ -128,11 +122,8 @@ function toForm(plan: SubscriptionDTO): SubscriptionFormState {
     id: plan.id,
     name: plan.name ?? "",
     description: plan.description ?? "",
-    type: plan.type ?? "Basic",
     price: String(plan.price ?? 0),
     durationDays: plan.durationDays == null ? "" : String(plan.durationDays),
-    pointsCost: plan.pointsCost == null ? "" : String(plan.pointsCost),
-    rewardPoints: String(plan.rewardPoints ?? 0),
     maxOrganizations:
       plan.maxOrganizations == null ? "" : String(plan.maxOrganizations),
     maxOrganizationUsers:
@@ -147,16 +138,13 @@ function buildCreatePayload(form: SubscriptionFormState): SubscriptionCreateRequ
   return {
     name: form.name.trim(),
     description: form.description.trim() || null,
-    type: form.type.trim(),
     price: Number(form.price) || 0,
-    durationDays: parseOptionalNumber(form.durationDays),
-    pointsCost: parseOptionalNumber(form.pointsCost),
-    rewardPoints: Number(form.rewardPoints) || 0,
+    durationDays: parseOptionalNumber(form.durationDays) ?? 0,
     isActive: form.isActive,
-    maxOrganizations: parseOptionalNumber(form.maxOrganizations),
-    maxOrganizationUsers: parseOptionalNumber(form.maxOrganizationUsers),
-    maxStorageBytes: storageGbToBytes(form.maxStorageGb),
-    sortOrder: parseOptionalNumber(form.sortOrder),
+    maxOrganizations: parseOptionalNumber(form.maxOrganizations) ?? 0,
+    maxOrganizationUsers: parseOptionalNumber(form.maxOrganizationUsers) ?? 0,
+    maxStorageBytes: storageGbToBytes(form.maxStorageGb) ?? 0,
+    sortOrder: parseOptionalNumber(form.sortOrder) ?? 0,
   };
 }
 
@@ -589,8 +577,8 @@ export function AdminSubscriptionScreen() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.name.trim() || !form.type.trim()) {
-      toast.error("Vui lòng nhập tên và loại gói");
+    if (!form.name.trim()) {
+      toast.error("Vui lòng nhập tên gói");
       return;
     }
 
@@ -1442,17 +1430,6 @@ export function AdminSubscriptionScreen() {
                     className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </label>
-                <label className="space-y-1.5 text-sm font-medium">
-                  <span>Loại gói</span>
-                  <input
-                    required
-                    value={form.type}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, type: event.target.value }))
-                    }
-                    className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </label>
                 <label className="space-y-1.5 text-sm font-medium sm:col-span-2">
                   <span>Mô tả</span>
                   <textarea
@@ -1535,36 +1512,6 @@ export function AdminSubscriptionScreen() {
                       setForm((prev) => ({
                         ...prev,
                         maxStorageGb: event.target.value,
-                      }))
-                    }
-                    className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </label>
-                <label className="space-y-1.5 text-sm font-medium">
-                  <span>Điểm đổi gói</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.pointsCost}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        pointsCost: event.target.value,
-                      }))
-                    }
-                    className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </label>
-                <label className="space-y-1.5 text-sm font-medium">
-                  <span>Điểm thưởng</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.rewardPoints}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        rewardPoints: event.target.value,
                       }))
                     }
                     className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"

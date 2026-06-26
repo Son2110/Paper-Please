@@ -8,10 +8,8 @@ export interface SubscriptionDTO {
   description?: string | null;
   price: number;
   type?: string | null;
-  rewardPoints?: number | null;
   durationDays?: number | null;
   isActive?: boolean | null;
-  pointsCost?: number | null;
   maxOrganizations?: number | null;
   maxOrganizationUsers?: number | null;
   maxStorageBytes?: number | null;
@@ -30,15 +28,12 @@ export interface SubscriptionCreateRequest {
   name: string;
   description?: string | null;
   price: number;
-  type: string;
-  durationDays?: number | null;
-  pointsCost?: number | null;
-  rewardPoints: number;
-  isActive?: boolean | null;
-  maxOrganizations?: number | null;
-  maxOrganizationUsers?: number | null;
-  maxStorageBytes?: number | null;
-  sortOrder?: number | null;
+  durationDays: number;
+  isActive: boolean;
+  maxOrganizations: number;
+  maxOrganizationUsers: number;
+  maxStorageBytes: number;
+  sortOrder: number;
 }
 
 export interface SubscriptionUpdateRequest extends Partial<SubscriptionCreateRequest> {
