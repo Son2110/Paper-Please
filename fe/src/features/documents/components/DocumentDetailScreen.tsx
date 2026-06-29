@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -276,6 +276,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   const [workflowRows, setWorkflowRows] = useState<WorkflowRow[]>([
     createWorkflowRow(),
   ]);
+  const prefilledCancelledWorkflowIdRef = useRef<string | null>(null);
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [showResubmitModal, setShowResubmitModal] = useState(false);
   const [resubmitFile, setResubmitFile] = useState<File | null>(null);
@@ -296,6 +297,12 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     string | null
   >(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
+  const [workflowAction, setWorkflowAction] = useState<
+    "Approved" | "Rejected" | null
+  >(null);
+  const [workflowActionComment, setWorkflowActionComment] = useState("");
+  const [isProcessingWorkflowAction, setIsProcessingWorkflowAction] =
+    useState(false);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.documents.detail(docId),
@@ -336,8 +343,46 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     () => (Array.isArray(detail?.participants) ? detail.participants : []),
     [detail?.participants],
   );
-  const workflows = Array.isArray(detail?.workflows) ? detail.workflows : [];
-  const currentWorkflow = workflows[0] ?? null;
+  const workflows = useMemo(
+    () => (Array.isArray(detail?.workflows) ? detail.workflows : []),
+    [detail?.workflows],
+  );
+  const currentWorkflow = useMemo(() => {
+    if (workflows.length === 0) return null;
+
+    if (
+      document?.status === "InProgress" ||
+      document?.status === "WaitingSignature"
+    ) {
+      return (
+        workflows.find((workflow) => workflow.status === "InProgress") ??
+        workflows[0]
+      );
+    }
+
+    if (document?.status === "Rejected") {
+      return (
+        workflows.find((workflow) => workflow.status === "Rejected") ??
+        workflows[0]
+      );
+    }
+
+    if (document?.status === "Completed") {
+      return (
+        workflows.find((workflow) => workflow.status === "Completed") ??
+        workflows[0]
+      );
+    }
+
+    if (document?.status === "Draft") {
+      return (
+        workflows.find((workflow) => workflow.status === "Cancelled") ??
+        workflows[0]
+      );
+    }
+
+    return workflows.find((workflow) => workflow.status === "InProgress") ?? workflows[0];
+  }, [document?.status, workflows]);
   const comments = Array.isArray(detail?.comments) ? detail.comments : [];
   const audits = Array.isArray(detail?.audits) ? detail.audits : [];
   const currentVersion = useMemo(
@@ -358,12 +403,27 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     currentWorkflow.status === "Cancelled";
   const isRejectedDocument =
     document?.status === "Rejected" || currentWorkflow?.status === "Rejected";
+  const currentWorkflowSteps = useMemo(
+    () => (Array.isArray(currentWorkflow?.steps) ? currentWorkflow.steps : []),
+    [currentWorkflow?.steps],
+  );
+  const isCancelledWorkflow = currentWorkflow?.status === "Cancelled";
   const workflowSubmitLabel = isRejectedDocument
     ? "Nộp lại tài liệu"
-    : "Tạo quy trình";
-  const currentWorkflowSteps = Array.isArray(currentWorkflow?.steps)
-    ? currentWorkflow.steps
-    : [];
+    : isCancelledWorkflow
+      ? "Tạo lại quy trình"
+      : "Tạo quy trình";
+  const reusableWorkflowRows = useMemo(
+    () =>
+      [...currentWorkflowSteps]
+        .sort((left, right) => left.stepOrder - right.stepOrder)
+        .map((step) => ({
+          id: crypto.randomUUID(),
+          userId: step.assignedToId,
+          stepType: step.stepType,
+        })),
+    [currentWorkflowSteps],
+  );
   const rejectedStep = [...currentWorkflowSteps]
     .sort((left, right) => right.stepOrder - left.stepOrder)
     .find((step) => step.status === "Rejected");
@@ -371,6 +431,9 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     rejectedStep?.comment?.trim() || "Người xử lý chưa cung cấp lý do từ chối.";
   const pendingStep = currentWorkflowSteps.find(
     (step) => step.status === "Pending",
+  );
+  const pendingStepForCurrentUser = currentWorkflowSteps.find(
+    (step) => step.status === "Pending" && step.assignedToId === user?.id,
   );
   const completedSteps = currentWorkflowSteps.filter(
     (step) => step.status !== "Pending",
@@ -403,9 +466,26 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     canManageDocumentAccess ||
     currentParticipant?.accessLevel === "Owner" ||
     currentParticipant?.accessLevel === "Editor";
+  const canCancelWorkflow =
+    currentWorkflow?.status === "InProgress" &&
+    currentParticipant?.accessLevel === "Owner";
   const canResubmitDocument =
     isRejectedDocument &&
     (isDocumentCreator || currentParticipant?.accessLevel === "Owner");
+
+  useEffect(() => {
+    if (
+      !currentWorkflow ||
+      currentWorkflow.status !== "Cancelled" ||
+      reusableWorkflowRows.length === 0 ||
+      prefilledCancelledWorkflowIdRef.current === currentWorkflow.id
+    ) {
+      return;
+    }
+
+    setWorkflowRows(reusableWorkflowRows);
+    prefilledCancelledWorkflowIdRef.current = currentWorkflow.id;
+  }, [currentWorkflow, reusableWorkflowRows]);
 
   const refreshDetail = () =>
     queryClient.invalidateQueries({
@@ -682,6 +762,47 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
     setShowCancelWorkflowConfirm(true);
   };
 
+  const openWorkflowActionModal = (action: "Approved" | "Rejected") => {
+    if (!pendingStepForCurrentUser) {
+      toast.error("Bạn chưa có bước xử lý nào ở tài liệu này.");
+      return;
+    }
+
+    setWorkflowAction(action);
+    setWorkflowActionComment("");
+  };
+
+  const closeWorkflowActionModal = () => {
+    if (isProcessingWorkflowAction) return;
+    setWorkflowAction(null);
+    setWorkflowActionComment("");
+  };
+
+  const handleProcessWorkflowAction = async () => {
+    if (!pendingStepForCurrentUser || !workflowAction) return;
+
+    setIsProcessingWorkflowAction(true);
+    try {
+      await documentApi.processWorkflowStep(pendingStepForCurrentUser.id, {
+        status: workflowAction,
+        comment: workflowActionComment.trim() || null,
+      });
+      toast.success(
+        workflowAction === "Approved" ? "Đã phê duyệt." : "Đã từ chối.",
+      );
+      setWorkflowAction(null);
+      setWorkflowActionComment("");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      await refreshDetail();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Không thể xử lý tài liệu.",
+      );
+    } finally {
+      setIsProcessingWorkflowAction(false);
+    }
+  };
+
   const confirmCancelWorkflow = async () => {
     try {
       await documentApi.cancelWorkflow(docId);
@@ -878,6 +999,62 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
   return (
     <>
       {isEditModalOpen && <EditDocumentModal />}
+      <AppModal
+        open={Boolean(workflowAction)}
+        onOpenChange={(open) => {
+          if (!open) closeWorkflowActionModal();
+        }}
+        className="max-w-lg"
+        title={
+          workflowAction === "Approved" ? "Phê duyệt tài liệu" : "Từ chối tài liệu"
+        }
+        description={document?.title}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={closeWorkflowActionModal}
+              disabled={isProcessingWorkflowAction}
+              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleProcessWorkflowAction}
+              disabled={isProcessingWorkflowAction}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60",
+                workflowAction === "Approved"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-red-600 text-white hover:bg-red-700",
+              )}
+            >
+              {isProcessingWorkflowAction ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Xác nhận
+            </button>
+          </>
+        }
+      >
+        <label className="block">
+          <span className="text-sm font-medium text-foreground">Ghi chú</span>
+          <textarea
+            value={workflowActionComment}
+            onChange={(event) => setWorkflowActionComment(event.target.value)}
+            rows={4}
+            placeholder={
+              workflowAction === "Approved"
+                ? "Thêm ghi chú khi phê duyệt..."
+                : "Nhập lý do từ chối..."
+            }
+            className="mt-1 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </label>
+      </AppModal>
       <AppModal
         open={showResubmitModal}
         onOpenChange={(open) => {
@@ -1274,6 +1451,26 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                           pendingStep.assignedToId}
                         .
                       </p>
+                      {pendingStepForCurrentUser ? (
+                        <div className="mt-4 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openWorkflowActionModal("Approved")}
+                            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Duyệt tài liệu
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openWorkflowActionModal("Rejected")}
+                            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            <XCircle className="h-4 w-4" />
+                            Từ chối
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="mt-3 text-sm text-muted-foreground">
@@ -1374,6 +1571,20 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
 
             {activeTab === "workflow" && (
               <div className="space-y-5 p-5">
+                {document?.status === "Draft" && (
+                  <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="inline-flex rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800">
+                        Bản nháp
+                      </div>
+                      <p className="mt-2 text-sm text-amber-800">
+                        Tài liệu đang ở bản nháp. Nếu quy trình vừa bị hủy,
+                        hãy kiểm tra lại nội dung rồi tạo quy trình xử lý mới.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {isRejectedDocument && (
                   <div className="flex flex-col gap-4 rounded-lg border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -1408,7 +1619,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                           đã xử lý.
                         </p>
                       </div>
-                      {currentWorkflow.status === "InProgress" && (
+                      {canCancelWorkflow && (
                         <button
                           type="button"
                           onClick={handleCancelWorkflow}
@@ -1434,6 +1645,12 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
                           Chọn người xử lý theo đúng thứ tự. Thông tin phiên bản
                           và audit vẫn giữ nguyên.
                         </p>
+                        {isCancelledWorkflow && reusableWorkflowRows.length > 0 && (
+                          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            Đã điền lại người xử lý từ quy trình vừa hủy. Bạn có
+                            thể chỉnh trước khi tạo lại.
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1761,7 +1978,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
           if (!open) setShowCancelWorkflowConfirm(false);
         }}
         title="Hủy quy trình xử lý"
-        description="Quy trình đang xử lý của tài liệu này sẽ bị hủy."
+        description="Chỉ chủ tài liệu có thể hủy quy trình đang chạy. Tài liệu sẽ quay về bản nháp để chỉnh lại."
         footer={
           <>
             <button
@@ -1787,7 +2004,7 @@ export function DocumentDetailScreen({ docId, onBack }: DocumentDetailProps) {
             {document?.title || "Tài liệu hiện tại"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {currentWorkflowSteps.length} bước xử lý
+            {currentWorkflowSteps.length} bước xử lý. Những người đang chờ xử lý sẽ không thể duyệt tiếp quy trình này.
           </p>
         </div>
       </AppModal>

@@ -139,13 +139,6 @@ const submissionStatusFilters: DocumentStatus[] = [
   "Rejected",
 ];
 
-const workflowTypeLabels: Record<WorkflowStepType, string> = {
-  Review: "Xem xét",
-  Approve: "Phê duyệt",
-  Sign: "Ký tài liệu",
-  Acknowledge: "Xác nhận đã đọc",
-};
-
 const workflowAccessLabels: Record<
   Exclude<DocumentAccessLevel, "Owner">,
   string
@@ -638,11 +631,11 @@ export function DocumentHubScreen({
       return;
     }
     if (selectedWorkflowSteps.length === 0) {
-      toast.error("Vui lòng chọn ít nhất một người phê duyệt.");
+      toast.error("Vui lòng chọn ít nhất một người xử lý.");
       return;
     }
     if (selectedWorkflowSteps.some((step) => step.assignedToId === user?.id)) {
-      toast.error("Bạn không thể tự phê duyệt tài liệu của mình.");
+      toast.error("Bạn không thể tự xử lý tài liệu của mình.");
       return;
     }
 
@@ -701,7 +694,7 @@ export function DocumentHubScreen({
         steps: selectedWorkflowSteps,
       });
 
-      toast.success("Đã tạo tài liệu và quy trình phê duyệt.");
+      toast.success("Đã tạo tài liệu và quy trình xử lý.");
       resetCreateModal();
       await queryClient.invalidateQueries({
         queryKey: queryKeys.documents.all,
@@ -1012,7 +1005,7 @@ export function DocumentHubScreen({
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {isRepository
-                          ? "Tài liệu sẽ xuất hiện ở đây sau khi quy trình phê duyệt hoàn tất."
+                          ? "Tài liệu sẽ xuất hiện ở đây sau khi quy trình xử lý hoàn tất."
                           : "Nộp tài liệu đầu tiên để bắt đầu quy trình xử lý trong tổ chức."}
                       </p>
                     </div>
@@ -1265,30 +1258,6 @@ export function DocumentHubScreen({
 
             <label>
               <span className="text-sm font-medium text-foreground">
-                Phòng ban
-              </span>
-              <select
-                value={createForm.departmentId}
-                onChange={(event) =>
-                  setCreateForm((prev) => ({
-                    ...prev,
-                    departmentId: event.target.value,
-                  }))
-                }
-                disabled={departments.length === 0}
-                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">Chưa phân loại</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span className="text-sm font-medium text-foreground">
                 Ghi chú phiên bản
               </span>
               <input
@@ -1354,8 +1323,32 @@ export function DocumentHubScreen({
               Quy trình xử lý
             </summary>
             <p className="mt-2 text-sm text-muted-foreground">
-              Chọn người phê duyệt và quyền truy cập tài liệu của từng người.
+              Chọn phòng ban, người xử lý và quyền truy cập tài liệu của từng người.
             </p>
+
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-foreground">
+                Phòng ban xử lý
+              </span>
+              <select
+                value={createForm.departmentId}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    departmentId: event.target.value,
+                  }))
+                }
+                disabled={departments.length === 0}
+                className="mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">Tất cả thành viên trong tổ chức</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             {createForm.departmentId ? (
               <p className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
@@ -1367,7 +1360,7 @@ export function DocumentHubScreen({
             !selectedDepartmentMembersQuery.isFetching &&
             workflowMemberOptions.length === 0 ? (
               <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Phòng ban này chưa có thành viên phù hợp để phê duyệt.
+                Phòng ban này chưa có thành viên phù hợp để xử lý.
               </p>
             ) : null}
 
@@ -1375,7 +1368,7 @@ export function DocumentHubScreen({
               {workflowRows.map((row, index) => (
                 <div
                   key={row.id}
-                  className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_150px_auto_auto] md:items-center"
+                  className="grid gap-3 rounded-lg bg-muted/30 p-3 md:grid-cols-[80px_1fr_150px_auto] md:items-center"
                 >
                   <div className="text-sm font-semibold text-muted-foreground">
                     Bước {index + 1}
@@ -1409,9 +1402,6 @@ export function DocumentHubScreen({
                       </option>
                     ))}
                   </select>
-                  <span className="inline-flex h-10 items-center rounded-lg border bg-background px-3 text-sm font-semibold text-muted-foreground">
-                    {workflowTypeLabels.Approve}
-                  </span>
                   <select
                     value={row.accessLevel}
                     onChange={(event) =>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
@@ -7,10 +7,7 @@ import {
   Eye,
   Loader2,
   RefreshCcw,
-  Send,
-  XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
 import {
   documentApi,
   type DocumentDTO,
@@ -18,7 +15,6 @@ import {
   type WorkflowStepType,
 } from "@/api/documentApi";
 import { queryKeys } from "@/api/queryKeys";
-import { AppModal } from "@/shared/components/AppModal";
 import { PaginationFooter } from "@/shared/components/PaginationFooter";
 import { useOrganization } from "@/context/OrganizationContext";
 import type { Document } from "@/pages/Index";
@@ -30,6 +26,7 @@ interface ApprovalsProps {
 
 const TASK_PAGE_SIZE = 10;
 const TASK_FETCH_PAGE_SIZE = 200;
+const actionableDocumentStatuses = new Set(["InProgress", "WaitingSignature"]);
 
 const stepTypeLabels: Record<WorkflowStepType, string> = {
   Review: "Xem xét",
@@ -63,14 +60,8 @@ function getDaysPending(dateString?: string | null): string {
 }
 
 export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
-  const queryClient = useQueryClient();
   const { activeOrganization } = useOrganization();
   const organizationId = activeOrganization?.id;
-  const [selectedTask, setSelectedTask] =
-    useState<PendingWorkflowTaskDTO | null>(null);
-  const [action, setAction] = useState<"Approved" | "Rejected" | null>(null);
-  const [comment, setComment] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [page, setPage] = useState(1);
 
   const tasksQuery = useQuery({
@@ -111,14 +102,49 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
     () => new Set(organizationDocuments.map((document) => document.id)),
     [organizationDocuments],
   );
-  const scopedTasks = useMemo(
+  const organizationDocumentsById = useMemo(
     () =>
-      tasks.filter(
-        (task) =>
-          organizationDocumentIds.has(task.documentId) ||
-          task.organizationName === activeOrganization?.name,
+      new Map(
+        organizationDocuments.map((document) => [document.id, document]),
       ),
-    [activeOrganization?.name, organizationDocumentIds, tasks],
+    [organizationDocuments],
+  );
+  const scopedTasks = useMemo(
+    () => {
+      const newestTaskByDocument = new Map<string, PendingWorkflowTaskDTO>();
+
+      tasks
+        .filter((task) => {
+          const document = organizationDocumentsById.get(task.documentId);
+          const belongsToActiveOrganization =
+            organizationDocumentIds.has(task.documentId) ||
+            task.organizationName === activeOrganization?.name;
+
+          if (!belongsToActiveOrganization) return false;
+          if (!document) return true;
+
+          return actionableDocumentStatuses.has(document.status);
+        })
+        .forEach((task) => {
+          const currentTask = newestTaskByDocument.get(task.documentId);
+          const taskCreatedAt = new Date(task.createdDate ?? 0).getTime();
+          const currentCreatedAt = currentTask
+            ? new Date(currentTask.createdDate ?? 0).getTime()
+            : -1;
+
+          if (!currentTask || taskCreatedAt >= currentCreatedAt) {
+            newestTaskByDocument.set(task.documentId, task);
+          }
+        });
+
+      return Array.from(newestTaskByDocument.values());
+    },
+    [
+      activeOrganization?.name,
+      organizationDocumentIds,
+      organizationDocumentsById,
+      tasks,
+    ],
   );
   const isLoading =
     tasksQuery.isLoading ||
@@ -153,42 +179,6 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-
-  const openActionModal = (
-    task: PendingWorkflowTaskDTO,
-    nextAction: "Approved" | "Rejected",
-  ) => {
-    setSelectedTask(task);
-    setAction(nextAction);
-    setComment("");
-  };
-
-  const closeActionModal = () => {
-    setSelectedTask(null);
-    setAction(null);
-    setComment("");
-  };
-
-  const handleProcess = async () => {
-    if (!selectedTask || !action) return;
-
-    setIsProcessing(true);
-    try {
-      await documentApi.processWorkflowStep(selectedTask.id, {
-        status: action,
-        comment: comment.trim() || null,
-      });
-      toast.success(action === "Approved" ? "Đã phê duyệt." : "Đã từ chối.");
-      closeActionModal();
-      await queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Không thể xử lý yêu cầu.";
-      toast.error(message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -287,26 +277,10 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
                   <button
                     type="button"
                     onClick={() => onOpenDetail(task.documentId)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                   >
                     <Eye className="h-4 w-4" />
-                    Chi tiết
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openActionModal(task, "Rejected")}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-semibold text-red-700 hover:bg-red-100"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Từ chối
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openActionModal(task, "Approved")}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Duyệt
+                    Xem tài liệu
                   </button>
                 </div>
               </article>
@@ -324,63 +298,6 @@ export function ApprovalsScreen({ onOpenDetail }: ApprovalsProps) {
         )}
       </section>
 
-      <AppModal
-        open={Boolean(selectedTask && action)}
-        onOpenChange={(open) => {
-          if (!open && !isProcessing) closeActionModal();
-        }}
-        className="max-w-lg"
-        title={action === "Approved" ? "Duyệt tài liệu" : "Từ chối tài liệu"}
-        description={selectedTask?.documentTitle}
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={closeActionModal}
-              disabled={isProcessing}
-              className="rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              onClick={handleProcess}
-              disabled={isProcessing}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
-                action === "Approved"
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }`}
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Xác nhận
-            </button>
-          </>
-        }
-      >
-        {selectedTask && action && (
-          <div className="space-y-4">
-              <label className="block">
-                <span className="text-sm font-medium text-foreground">Ghi chú</span>
-                <textarea
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  rows={4}
-                  placeholder={
-                    action === "Approved"
-                      ? "Thêm ghi chú khi duyệt..."
-                      : "Nhập lý do từ chối..."
-                  }
-                  className="mt-1 w-full resize-none rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </label>
-          </div>
-        )}
-      </AppModal>
     </div>
   );
 }
